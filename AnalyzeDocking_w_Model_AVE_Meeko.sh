@@ -1,4 +1,5 @@
 #!/bin/bash
+#Version 1.0.0
 #This script is used to analyze the docking folder output.  Last modified 05/28/2024 by J.MFing.Leitz
 
 #SBATCH --job-name=AnalyzeDocking
