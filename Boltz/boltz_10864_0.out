@@ -1,0 +1,27 @@
+Processing input file: /data/jleitz/CAMK2D/Boltz_test/Nutz/Ligand_yamls/chunk_0000
+Number of compounds: 5
+Processing compound 1: ApexBio_1
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process ApexBio_1_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on ApexBio_1
+Processing compound 2: ApexBio_2
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process ApexBio_2_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on ApexBio_2
+Processing compound 3: ApexBio_3
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process ApexBio_3_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on ApexBio_3
+Processing compound 4: ApexBio_4
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process ApexBio_4_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on ApexBio_4
+Processing compound 5: ApexBio_5
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process ApexBio_5_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on ApexBio_5

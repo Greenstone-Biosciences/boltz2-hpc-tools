@@ -1,0 +1,82 @@
+Processing input file: /data/jleitz/CAMK2D/Boltz_test/Nutz/Ligand_yamls/chunk_0001
+Number of compounds: 6
+Processing compound 1: 3130
+Checking input data.
+Processing 1 inputs with 1 threads.
+Failed to process 3130_affinity.yaml. Skipping. Error: 'NoneType' object has no attribute 'GetAtoms'.
+finished prediction on 3130
+Processing compound 2: 11600
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 11600_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 11600
+Processing compound 3: 732
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 732_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 732
+Processing compound 4: 81
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 81_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 81
+Processing compound 5: 25
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 25_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 25
+Processing compound 6: 301
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 301_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 301

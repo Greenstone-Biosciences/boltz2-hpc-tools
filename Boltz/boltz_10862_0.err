@@ -1,0 +1,95 @@
+  0%|          | 0/1 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/main.py", line 499, in process_input
+    target = parse_yaml(path, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/yaml.py", line 68, in parse_yaml
+    return parse_boltz_schema(name, data, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1222, in parse_boltz_schema
+    seq = standardize(seq)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1780, in standardize
+    exclude = exclude_flag(mol, includeRDKitSanitization=False)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/chembl_structure_pipeline/exclude_flag.py", line 105, in exclude_flag
+    for atom in mol.GetAtoms():
+                ^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'GetAtoms'
+100%|██████████| 1/1 [00:00<00:00, 155.71it/s]
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default
+  0%|          | 0/1 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/main.py", line 499, in process_input
+    target = parse_yaml(path, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/yaml.py", line 68, in parse_yaml
+    return parse_boltz_schema(name, data, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1222, in parse_boltz_schema
+    seq = standardize(seq)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1780, in standardize
+    exclude = exclude_flag(mol, includeRDKitSanitization=False)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/chembl_structure_pipeline/exclude_flag.py", line 105, in exclude_flag
+    for atom in mol.GetAtoms():
+                ^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'GetAtoms'
+100%|██████████| 1/1 [00:00<00:00, 334.05it/s]
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default
+  0%|          | 0/1 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/main.py", line 499, in process_input
+    target = parse_yaml(path, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/yaml.py", line 68, in parse_yaml
+    return parse_boltz_schema(name, data, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1222, in parse_boltz_schema
+    seq = standardize(seq)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1780, in standardize
+    exclude = exclude_flag(mol, includeRDKitSanitization=False)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/chembl_structure_pipeline/exclude_flag.py", line 105, in exclude_flag
+    for atom in mol.GetAtoms():
+                ^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'GetAtoms'
+100%|██████████| 1/1 [00:00<00:00, 319.74it/s]
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default
+  0%|          | 0/1 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/main.py", line 499, in process_input
+    target = parse_yaml(path, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/yaml.py", line 68, in parse_yaml
+    return parse_boltz_schema(name, data, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1222, in parse_boltz_schema
+    seq = standardize(seq)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1780, in standardize
+    exclude = exclude_flag(mol, includeRDKitSanitization=False)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/chembl_structure_pipeline/exclude_flag.py", line 105, in exclude_flag
+    for atom in mol.GetAtoms():
+                ^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'GetAtoms'
+100%|██████████| 1/1 [00:00<00:00, 325.95it/s]
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default
+  0%|          | 0/1 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/main.py", line 499, in process_input
+    target = parse_yaml(path, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/yaml.py", line 68, in parse_yaml
+    return parse_boltz_schema(name, data, ccd, mol_dir, boltz2)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1222, in parse_boltz_schema
+    seq = standardize(seq)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/boltz/data/parse/schema.py", line 1780, in standardize
+    exclude = exclude_flag(mol, includeRDKitSanitization=False)
+  File "/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/chembl_structure_pipeline/exclude_flag.py", line 105, in exclude_flag
+    for atom in mol.GetAtoms():
+                ^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'GetAtoms'
+100%|██████████| 1/1 [00:00<00:00, 339.37it/s]
+Using bfloat16 Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+/home/jleitz/anaconda3/envs/boltz/lib/python3.13/site-packages/pytorch_lightning/trainer/connectors/logger_connector/logger_connector.py:76: Starting from v1.9.0, `tensorboardX` has been removed as a dependency of the `pytorch_lightning` package, due to potential conflicts with other packages in the ML ecosystem. For this reason, `logger=True` will use `CSVLogger` as the default logger, unless the `tensorboard` or `tensorboardX` packages are found. Please `pip install lightning[extra]` or one of them to enable TensorBoard support by default

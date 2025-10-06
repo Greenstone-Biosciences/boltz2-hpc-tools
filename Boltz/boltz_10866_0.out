@@ -1,0 +1,62 @@
+Processing input file: /data/jleitz/CAMK2D/Boltz_test/Nutz/Ligand_yamls/chunk_0000
+Number of compounds: 4
+Processing compound 1: 6120
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 6120_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 6120
+Processing compound 2: 527
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 527_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:23<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:18<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:18<00:00,  0.05it/s]
+finished prediction on 527
+Processing compound 3: 1170
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 1170_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 1170
+Processing compound 4: 3050
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for 3050_affinity.yaml with 1 protein entities.
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:24<00:00,  0.04it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:19<00:00,  0.05it/s]
+finished prediction on 3050
