@@ -73,7 +73,7 @@ for line in $(seq 1 $(cat $LigandFile | wc -l)); do
 		if [ ! -f $OutDIR/Docked/$name"_out.pdbqt" ]; then
 			echo 'converting '$name' from '$LigandFile
 			echo "sem -j $jobs --id $$ -u timeout 30m /data/Shared/Docking_Scripts/ConvertNDock.sh $line $LigandFile $OutDIR $Exhaustiveness $CenterX $CenterY $CenterZ $SizeX $SizeY $SizeZ $Recept"
-			sem -j $jobs --id $$ -u timeout 30m ~/Software/VerdeLeitz_scripts/SlurmScripts/ConvertNDock_Meeko.sh $line $LigandFile $OutDIR $Exhaustiveness $CenterX $CenterY $CenterZ $SizeX $SizeY $SizeZ $Recept;
+			sem -j $jobs --id $$ -u timeout 30m /data/Shared/Docking_Scripts/ConvertNDock_Meeko.sh $line $LigandFile $OutDIR $Exhaustiveness $CenterX $CenterY $CenterZ $SizeX $SizeY $SizeZ $Recept;
 		else 
 			continue
 		fi
