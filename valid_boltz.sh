@@ -120,8 +120,6 @@ echo "========================================"
 echo "Input directory:   $INPUT_DIR"
 echo "Output directory:  $OUTPUT_DIR"
 echo "CIF files found:   $CIF_COUNT"
-echo "Boltz environment: $BOLTZ_ENV"
-echo "Analysis env:      $ANALYSIS_ENV"
 echo "========================================"
 echo ""
 
