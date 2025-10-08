@@ -10,40 +10,60 @@
 #
 #
 #
-# Default Values
+# Default values
 INPUT_DIR=""
-OUTPUT_DIR="${OUTPUT_DIR:-./aligned_cifs}" # Set the default values to ./aligned_cifs
+OUTPUT_DIR=""
+VERBOSE=false
 
 # Help message
-shoe_help() {
+show_help() {
 	cat << EOF
 Usage: ${0##*/} [OPTIONS]
 
-Aligns .cifs and then checks centers of ligands for binding positions and then compares.
-To be generally used with receptor .cifs with 'bound' ligands either through boltz2 pipeline or other.
+Analyzes Boltz2 docking results for kinases with cofolded ligands by:
+  1. Aligning all protein structures using US-align
+  2. Parsing aligned .cif files to extract ligand (HETATM) coordinates
+  3. Calculating ligand centroids
+  4. Computing pairwise distances between ligand positions
 
 Required Arguments:
-	-i, --input DIR		Input directory containing .cifs (/your/path)
+    -i, --input DIR           Directory containing .cif files from Boltz2
 
 Optional Arguments:
-	-o, --output DIR
-	-h, --help			Show this help message and exit
-	-v, --verbose			Verbose output with dates
+    -o, --output DIR          Output directory (default: ./analysis_output)
+    -v, --verbose             Verbose output
+    -h, --help                Show this help message
+
+Requirements:
+    - US-align must be in PATH
+    - Python 3 with NumPy
+
+Input Requirements:
+    - Directory must contain .cif files with kinase + ligand (HETATM)
+    - All structures should be of similar kinases with different ligand poses
+
+Output:
+    - aligned_cifs/           Aligned .cif files (input files unchanged)
+    - centroids.csv           Ligand centroid coordinates
+    - distances.csv           Pairwise distances between ligands
+    - binding_pocket.txt      Predicted binding pocket center
+    - analysis_summary.txt    Summary report
 
 Examples:
-	${0##*/} -i /data/Shared/Docking_Scripts/my_unaligned_cifs
-	${0##*/} -input /data/Shared/Docking_Scripts/my_unaligned_cifs
+    ${0##*/} -i ./boltz2_output/
+    ${0##*/} --input ./kinase_results/ --output ./analysis/
 
 EOF
-	exit 0
+    exit 0
 }
+
 
 # Parse Arguments
 while [[ $# -gt 0 ]]; do
        case $1 in
        		-i|--input)
 			if [[ -z "$2" || "$2" == -* ]]; then
-				echo "Error: -i|--input requires a value" >&2
+				echo "Error: -i|--input requires a directory path" >&2
 				exit 1
 			fi
 			INPUT_DIR="$2"
@@ -57,6 +77,10 @@ while [[ $# -gt 0 ]]; do
 			OUTPUT_DIR="$2"
 			shift 2
 			;;
+		-v|--verbose)
+			VERBOSE=true
+			shift
+			;;
 		-h|--help)
 			show_help
 			;;
@@ -68,6 +92,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 
+# Source the conda setup and activate the correct conda env
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate boltz
+
 
 # Validate required arguments
 if [[ -z "$INPUT_DIR" ]]; then
@@ -76,42 +104,60 @@ if [[ -z "$INPUT_DIR" ]]; then
 	exit 1
 fi
 
-
 # Validate input directory exists
 if [[ ! -d "$INPUT_DIR" ]]; then
 	echo "Error: Input directory '$INPUT_DIR' not found" >&2
 	exit 1
 fi
 
-# Validate for output directory, if not create one to put aligned .cifs
-if [[ ! -d "$OUTPUT_DIR" ]]; then
-	mkdir -p $OUTPUT_DIR || {
-		echo "Error: Cannot create output directory 'OUTPUT_DIR'" >&2
-		exit 1
-	}
-fi
-
-# Validate if output directory is even writable
-if [[ ! -w "$OUTPUT_DIR" ]]; then
-	echo "Error: Output directory '$OUTPUT_DIR' is not writable" >&2
-	exit 1
-fi
 
 # Check for .cif files
-CIF_COUNT=$(find "$INPUT_DIR" -maxdepth 1 -name "*.cif" | wc -l)
+CIF_FILES=($(find "$INPUT_DIR" -maxdepth 1 -name "*.cif" -type f | sort))
+CIF_COUNT=${#CIF_FILES[@]}
+
 if [[ $CIF_COUNT -eq 0 ]]; then
 	echo "Error: No .cif files found in '$INPUT_DIR'" >&2
 	exit 1
 fi
 
-# Source the conda setup and activate the correct conda env
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate boltz
+# Set default output directory if not provided
+OUTPUT_DIR="${OUTPUT_DIR:-./analysis_output}"
+
+# Create output directory
+if [[ ! -d "$OUTPUT_DIR" ]]; then
+	mkdir -p "$OUTPUT_DIR" || {
+		echo "Error: Cannot create output directory '$OUTPUT_DIR'" >&2
+		exit 1
+	}
+fi
+
+# Verify output directory is writable
+if ! touch "$OUTPUT_DIR/.write_test" 2>/dev/null; then
+	echo "Error: Cannot write to output directory '$OUTPUT_DIR'" >&2
+        exit 1
+fi
+
+rm "$OUTPUT_DIR/.write_test"
+
+# Create subdirectories
+mkdir -p "$OUTPUT_DIR/aligned_cifs"
+mkdir -p "$OUTPUT_DIR/usalign_logs"
+
+# Check if US-align is available
+if ! command -v USalign &> /dev/null; then
+	echo "Error: US-align not found in PATH" >&2
+	echo "Please install US-align or ensure it's in your conda environment" >&2
+	exit 1
+fi
+
+# Log function
+log() {
+	if [[ "$VERBOSE" == true ]]; then
+		echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+	fi
+}
 
 
-# Navigate to the input directory
-
-cd "$INPUT_DIR"
 
 # Print configuration
 echo "========================================"
@@ -123,5 +169,7 @@ echo "CIF files found:   $CIF_COUNT"
 echo "========================================"
 echo ""
 
-## (p1)start the meat of the alignment
+log "Starting analysis pipeline of .cifs..."
 
+
+## Step 1:
