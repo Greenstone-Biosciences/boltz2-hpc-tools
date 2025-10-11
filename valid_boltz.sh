@@ -141,7 +141,7 @@ rm "$OUTPUT_DIR/.write_test"
 
 # Create subdirectories
 mkdir -p "$OUTPUT_DIR/aligned_cifs"
-mkdir -p "$OUTPUT_DIR/usalign_logs"
+mkdir -p "$OUTPUT_DIR/logs"
 
 # Check if US-align is available
 if ! command -v USalign &> /dev/null; then
@@ -173,7 +173,9 @@ log "Starting analysis pipeline of .cifs..."
 echo ""
 
 
+##################################################
 ## Step 1: Retrieve .cifs and alignment
+##################################################
 # Run alignment and extract ligand centers of mass
 python3 << EOF
 import gemmi
@@ -280,3 +282,66 @@ if [[ $? -ne 0 ]]; then
 	echo "Error: Alignment failed :(" >&2
 	exit 1
 fi
+
+
+
+##################################################
+## Step 2:  Extract Ligand Centroids of Aligned .cifs
+##################################################
+
+echo ""
+echo "Step 2: Extracting ligand centers of mass from aligned structures"
+echo ""
+
+CENTROID_FILE="$OUTPUT_DIR/ligand_centers.txt"
+echo "# File X Y Z N_atoms" > "$CENTROID_FILE"
+
+printf "%-50s %35s %10s\n" "Structure" "Ligand Centroid (x, y, z)" "# Atoms"
+echo "--------------------------------------------------------------------------------"
+
+for CIF in "$OUTPUT_DIR/aligned_cifs"/*.cif; do
+	BASENAME=$(basename "$CIF")
+
+	# Extract HETATM lines for LIG1 ligand and get coordinates
+	# Only works if col 11, 12, and 13 of .cif are the x, y, z
+	COORDS=$(awk '
+        /^ATOM/ || /^HETATM/ {
+            # Check if this line contains LIG1
+                if ($0 ~ /LIG1/) {
+	                    # CIF format: fields are space-separated
+	                    # Print columns 11 (x), 12 (y), 13 (z)
+	                print $11, $12, $13
+                }
+        }
+	' "$CIF")
+    
+	if [[ -z "$COORDS" ]]; then
+	    echo "$BASENAME: No LIG1 ligand found" >&2
+	     continue
+	fi
+	    
+	# Calculate centroid using bc
+	N_ATOMS=$(echo "$COORDS" | wc -l)
+	SUM_X=0
+	SUM_Y=0
+	SUM_Z=0
+	
+	while read -r X Y Z; do
+	            SUM_X=$(echo "$SUM_X + $X" | bc)
+	                SUM_Y=$(echo "$SUM_Y + $Y" | bc)
+	                SUM_Z=$(echo "$SUM_Z + $Z" | bc)
+	        done <<< "$COORDS"
+	
+	CENT_X=$(echo "scale=3; $SUM_X / $N_ATOMS" | bc)
+	CENT_Y=$(echo "scale=3; $SUM_Y / $N_ATOMS" | bc)
+	CENT_Z=$(echo "scale=3; $SUM_Z / $N_ATOMS" | bc)
+	
+	# Save to file
+	echo "$BASENAME $CENT_X $CENT_Y $CENT_Z $N_ATOMS" >> "$CENTROID_FILE"
+	
+	printf "%-50s (%8.3f, %8.3f, %8.3f) %10s\n" "$BASENAME" "$CENT_X" "$CENT_Y" "$CENT_Z" "$N_ATOMS"
+done
+
+echo ""
+echo "✓ Ligand centers extracted and saved to ligand_centers.txt"
+
