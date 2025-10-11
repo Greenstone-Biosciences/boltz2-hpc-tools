@@ -208,7 +208,7 @@ ref_polymer = None
 for chain in ref_model:
 	poly = chain.get_polymer()
 	if poly:
-		re_polymer = poly
+		ref_polymer = poly
 		if verbose:
 			print(f"Found polymer in chain {chain.name}: {len(poly)} residues")
 		break
@@ -219,9 +219,64 @@ ref_st.make_mmcif_document().write_file(ref_output)
 print(f"Wrote reference file to {ref_output}")
 
 
+print(f"\n{'Structure':<50} {'RMSD (Å)'}")
+print("-" * 65)
+print(f"{ref_basename:<50} {'0.0000'}")
 
+for mobile_file in cif_files[1:]:
+	mobile_basename = os.path.basename(mobile_file)
+	mobile_name = os.path.splitext(mobile_basename)[0]
+#	print(mobile_basename)
+#	print(mobile_name)
 
+	try:
+		mobile_st = gemmi.read_structure(mobile_file)
+		mobile_model = mobile_st[0]
+		mobile_polymer = None
+		for chain in mobile_model:
+			poly = chain.get_polymer()
+			if poly:
+				mobile_polymer = poly
+				break
 
+		if not mobile_polymer:
+			print(f"{mobile_basename:<50} No polymer found", file=sys.stderr)
+			continue
+
+		# Main Calculation of mobile polymer superposition relative to reference polymer
+		# ptype = gemmi.PolymerType.PeptideL
+		sup = gemmi.calculate_superposition(
+			ref_polymer,
+			mobile_polymer,
+			gemmi.PolymerType.PeptideL,
+			gemmi.SupSelect.CaP
+		)
+	
+		# The alignment step where it applies the changes to mobile polymer
+		for chain in mobile_model:
+			for residue in chain:
+				for atom in residue:
+					atom.pos = sup.transform.apply(atom.pos)
+	
+		print(f"{mobile_basename:<50} {sup.rmsd:.3f}")
+#		print(f"Aligned {sup.count} matching CA atoms")
+			
+	
+		# Writes out the new aligned .cif
+		output_file = os.path.join(output_dir, "aligned_cifs", f"{mobile_name}_aligned.cif")
+		mobile_st.make_mmcif_document().write_file(output_file)
+	
+	
+	except Exception as e:
+		print(f"{mobile_basename:<50} Error: {e}", file=sys.stderr)
+		continue
+
+print(f"\n✓ Alignment complete")
 
 
 EOF
+
+if [[ $? -ne 0 ]]; then
+	echo "Error: Alignment failed :(" >&2
+	exit 1
+fi
