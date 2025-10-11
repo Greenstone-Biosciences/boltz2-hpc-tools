@@ -170,6 +170,58 @@ echo "========================================"
 echo ""
 
 log "Starting analysis pipeline of .cifs..."
+echo ""
 
 
-## Step 1:
+## Step 1: Retrieve .cifs and alignment
+# Run alignment and extract ligand centers of mass
+python3 << EOF
+import gemmi
+import sys
+import os
+from pathlib import Path
+
+input_dir = "$INPUT_DIR"
+output_dir = "$OUTPUT_DIR"
+verbose = "$VERBOSE"
+
+print("Step 1: Retrieve .cifs and alignment")
+
+# Get all CIF files
+cif_files = sorted([str(f) for f in Path(input_dir).glob("*.cif")])
+
+# Use first file as reference
+ref_file = cif_files[0]
+ref_basename = os.path.basename(ref_file)
+ref_name = os.path.splitext(ref_basename)[0]  # Remove .cif extension
+
+# Load reference structure and extract protein polymer
+print("Loading reference structure")
+print(f"Reference: {ref_basename}\n")
+
+# Load reference structure
+ref_st = gemmi.read_structure(ref_file)
+ref_model = ref_st[0]
+
+# Get reference polymer (protein chain for alignment)
+ref_polymer = None
+for chain in ref_model:
+	poly = chain.get_polymer()
+	if poly:
+		re_polymer = poly
+		if verbose:
+			print(f"Found polymer in chain {chain.name}: {len(poly)} residues")
+		break
+
+# Save reference structure to output_dir
+ref_output = os.path.join(output_dir, "aligned_cifs", f"{ref_name}_aligned.cif")
+ref_st.make_mmcif_document().write_file(ref_output)
+print(f"Wrote reference file to {ref_output}")
+
+
+
+
+
+
+
+EOF
