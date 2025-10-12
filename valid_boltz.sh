@@ -1,15 +1,11 @@
 #!/bin/bash
-#
-# valid_boltz.sh
-#
-# Description: This script is intended to filter and validate that ligands are binding to correct locations on a receptor or protein from the outputs of Boltz. The script will take .cif files, align them, find centers of ligands, and then compare ligand positions last. Outputting if any have a distance from the aligned binding pockets.
+################################################################################
+# Script Name:    align_and_extract_ligands.sh
+# Description:    Align Boltz2 structures and calculate ligand centroids
+# Usage:          ./align_and_extract_ligands.sh -i INPUT_DIR [-o OUTPUT_DIR]
+################################################################################
 
-# Input: directory containing .cifs with ligands as an output from boltz2
-# Usage: ./valid_boltz.sh -i input_dir
-# Requires: boltz env and USalign
-#
-#
-#
+
 # Default values
 INPUT_DIR=""
 OUTPUT_DIR=""
@@ -20,14 +16,14 @@ show_help() {
 	cat << EOF
 Usage: ${0##*/} [OPTIONS]
 
-Analyzes Boltz2 docking results for kinases with cofolded ligands by:
-  1. Aligning all protein structures using US-align
-  2. Parsing aligned .cif files to extract ligand (HETATM) coordinates
-  3. Calculating ligand centroids
-  4. Computing pairwise distances between ligand positions
+Aligns .cifs protein structures and calculates ligand centroids
+(e.g.Boltz2 outputs cofolded single receptor with multiple ligands)
+  1. Aligning all protein structures using gemmi
+  2. Parsing aligned .cif files to extract ligand and calculate ligand centroids
+  3. Calculated average position of all ligands and individual ligand distances
 
 Required Arguments:
-    -i, --input DIR           Directory containing .cif files from Boltz2
+    -i, --input DIR           Directory containing .cif files
 
 Optional Arguments:
     -o, --output DIR          Output directory (default: ./analysis_output)
@@ -35,23 +31,20 @@ Optional Arguments:
     -h, --help                Show this help message
 
 Requirements:
-    - US-align must be in PATH
-    - Python 3 with NumPy
+    - gemmi Python package
+    - bc calculator
 
 Input Requirements:
-    - Directory must contain .cif files with kinase + ligand (HETATM)
-    - All structures should be of similar kinases with different ligand poses
+    - Directory must contain .cif files
 
 Output:
-    - aligned_cifs/           Aligned .cif files (input files unchanged)
-    - centroids.csv           Ligand centroid coordinates
-    - distances.csv           Pairwise distances between ligands
-    - binding_pocket.txt      Predicted binding pocket center
-    - analysis_summary.txt    Summary report
+    - aligned_cifs/           Aligned .cif files (protein + ligand)
+    - ligand_centers.txt      Ligand center of mass coordinates
+    - ligand_deviations.txt   Distance from average position
 
 Examples:
-    ${0##*/} -i ./boltz2_output/
-    ${0##*/} --input ./kinase_results/ --output ./analysis/
+    ${0##*/} -i ./my_unaligned_cifs/
+    ${0##*/} --input ./my_unaligned_cifs/ --output ./analyzed_.cifs/
 
 EOF
     exit 0
@@ -398,4 +391,45 @@ printf "%-50s %15s %30s\n" "Structure" "Distance (Å)" "Direction Vector (x, y, 
 echo "--------------------------------------------------------------------------------"
 
 
+while read -r FILE X Y Z N; do
+	[[ "$FILE" == "#"* ]] && continue
 
+	# Calculate distance from average (magnitude)
+	DX=$(echo "$X - $AVG_X" | bc)
+	DY=$(echo "$Y - $AVG_Y" | bc)
+	DZ=$(echo "$Z - $AVG_Z" | bc)
+
+	DIST=$(echo "scale=3; sqrt(($DX)^2 + ($DY)^2 + ($DZ)^2)" | bc)
+
+	# Normalize direction vector (unit vector)
+	if (( $(echo "$DIST > 0" | bc -l) )); then
+		NORM_X=$(echo "scale=3; $DX / $DIST" | bc)
+		NORM_Y=$(echo "scale=3; $DY / $DIST" | bc)
+		NORM_Z=$(echo "scale=3; $DZ / $DIST" | bc)
+	else
+		NORM_X=0.000
+		NORM_X=0.000
+		NORM_X=0.000
+	fi
+
+	# Safe to file
+	echo "$FILE $DIST $NORM_X $NORM_Y $NORM_Z" >> "$DEVIATIONS_FILE"
+
+	printf "%-50s %15.3f (%6.3f, %6.3f, %6.3f)\n" "$FILE" "$DIST" "$NORM_X" "$NORM_Y" "$NORM_Z"
+
+done < "$CENTROID_FILE"
+
+
+echo ""
+echo "✓ Deviations saved to ligand_deviations.txt"
+
+
+echo ""
+echo "========================================"
+echo "Analysis Complete!"
+echo "========================================"
+echo "Output files:"
+echo "  aligned_cifs/           Aligned structures"
+echo "  ligand_centers.txt      Ligand centroids"
+echo "  ligand_deviations.txt   Distances from average"
+echo "========================================"
