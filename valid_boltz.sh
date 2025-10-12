@@ -327,10 +327,10 @@ for CIF in "$OUTPUT_DIR/aligned_cifs"/*.cif; do
 	SUM_Z=0
 	
 	while read -r X Y Z; do
-	            SUM_X=$(echo "$SUM_X + $X" | bc)
-	                SUM_Y=$(echo "$SUM_Y + $Y" | bc)
-	                SUM_Z=$(echo "$SUM_Z + $Z" | bc)
-	        done <<< "$COORDS"
+		SUM_X=$(echo "$SUM_X + $X" | bc)
+		SUM_Y=$(echo "$SUM_Y + $Y" | bc)
+		SUM_Z=$(echo "$SUM_Z + $Z" | bc)
+	done <<< "$COORDS"
 	
 	CENT_X=$(echo "scale=3; $SUM_X / $N_ATOMS" | bc)
 	CENT_Y=$(echo "scale=3; $SUM_Y / $N_ATOMS" | bc)
@@ -344,4 +344,58 @@ done
 
 echo ""
 echo "✓ Ligand centers extracted and saved to ligand_centers.txt"
+
+
+
+################################################################################
+# STEP 3: CALCULATE AVERAGE LIGAND POSITION AND DEVIATIONS
+################################################################################
+
+echo ""
+echo "Step 3: Analyzing ligand position variability"
+echo ""
+
+
+# Calculate average position (centroid of centroids)
+SUM_X=0
+SUM_Y=0
+SUM_Z=0
+COUNT=0
+
+while read -r FILE X Y Z N; do
+	[[ "$FILE" == "#"* ]] && continue
+	SUM_X=$(echo "$SUM_X + $X" | bc)
+	SUM_Y=$(echo "$SUM_Y + $Y" | bc)
+	SUM_Z=$(echo "$SUM_Z + $Z" | bc)
+	COUNT=$((COUNT + 1))
+done < "$CENTROID_FILE"
+
+
+if [[ $COUNT -eq 0 ]]; then
+	echo "Error: No ligand centroids found" >&2
+	exit 1
+fi
+
+
+AVG_X=$(echo "scale=3; $SUM_X / $COUNT" | bc)
+AVG_Y=$(echo "scale=3; $SUM_Y / $COUNT" | bc)
+AVG_Z=$(echo "scale=3; $SUM_Z / $COUNT" | bc)
+
+
+
+echo "Average ligand position (binding site center):"
+echo "  X: $AVG_X Å"
+echo "  Y: $AVG_Y Å"
+echo "  Z: $AVG_Z Å"
+echo "  Based on $COUNT ligand poses"
+echo ""
+
+# Calculate deviations from average
+DEVIATIONS_FILE="$OUTPUT_DIR/ligand_deviations.txt"
+echo "# File Distance_from_average Direction_X Direction_Y Direction_Z" > "$DEVIATIONS_FILE"
+
+printf "%-50s %15s %30s\n" "Structure" "Distance (Å)" "Direction Vector (x, y, z)"
+echo "--------------------------------------------------------------------------------"
+
+
 
