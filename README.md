@@ -50,6 +50,26 @@ These programs collecivetly and affectionately called "Nutz and Boltz" consist o
 For each program you may do -h flag to see a detailed usage. 
 
 The general workflow is:
+1) Fetch protein fasta using uniprot ID & split smiles file into n chunks for each slurm array job to process.
+```
+./prep_batch_boltz -p <uniprot_ID> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>]
+```
+The file containing SMILES strings may be comma or space separated, but the SMILES strings MUST be in the first column, followed by an Identifier in the second column.  Other columns are ignored. Optional flags: If there is a header in the SMILES file, include the flag --rm_header to ignore it. If you already have a msa file generated include the full path to that file after the -m flag. To run as only a single job, -j = 1 or omit the flag entirely. 
+
+The output will be a .slurm submission file. This file should be modified as needed for your use case (i.e. add #SBATCH time=??? or select specific GPU/partitions to use if required by your system). Simply run using sbatch (the command itself will be echoed to the terminal).
+
+2) Nutz.sh generates a yaml file for each line in the SMILES chunk file. Each yaml is then processed in boltz.  Note: boltz must be a command in currently in your path. 
+
+Each SMILE string will generate a boltz_results_IDENTIFYIER folder within the Ligand_Yamls directory in Nutz. 
+
+3) Analyze the entire Ligand_yamls directory and concatinate output into a file conmbine.csv in the output directory. Optionally overwrite an existing combine.csv file in the same directory using the -w flag.
+
+```
+./analyze_batch_boltz -i <Input Directory that contains 'Ligand_yamls' directory> -o <Output Directory> [-w/--overwrite]
+```
+
+Please feel free to contact us (me) with suggestions or changes. 
+
 
 
 ## Acknowledgment
