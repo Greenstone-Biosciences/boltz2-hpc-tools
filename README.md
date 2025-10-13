@@ -1,5 +1,6 @@
 # boltz2-hpc-tools
 A collection of (maybe) useful scripts for screening using boltz-2
+<<<<<<< HEAD
 
 ## About
 
@@ -23,3 +24,5 @@ a biomolecular interaction prediction model. Please install Boltz separately.
 
 If you use Boltz in your research, please cite:
 [include their citation from the repo]
+=======
+>>>>>>> a544c77a06bce1fbc58db57e0ae006df11904d8e
