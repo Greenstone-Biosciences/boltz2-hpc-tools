@@ -38,7 +38,7 @@ conda install -c conda-forge yq # YAML processor
 conda install -c conda-forge jq # JSON processor
 ```
 
-4. Create configuration file:
+4. Run the setup.sh script:
 ```
 bash
 cp config.template config.sh
