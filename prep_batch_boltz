@@ -30,7 +30,6 @@ while [[ $# -gt 0 ]]; do
 			shift
 			shift
 			;;
-
 		-s|--smiles)
 			smiles_og="$2"
 			shift
@@ -123,7 +122,7 @@ echo "#SBATCH --nodes=1
 #SBATCH --gpu-bind=single:1
 
 
-NUTZ_PATH -i ${PWD}/Nutz -p ${PWD}/Nutz/${Prot_ID}.fasta${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
+NUTZ_PATH/Nutz.sh -i ${PWD}/Nutz -p ${PWD}/Nutz/${Prot_ID}.fasta${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
 
 #Give final run command.
 if [[ $job_num -gt 1 ]]; then

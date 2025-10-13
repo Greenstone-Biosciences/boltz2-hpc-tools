@@ -3,7 +3,7 @@
 #Written by Jeremy Leitz (he is the one to blame!). 
 
 read -p "Path to Boltz installation [$HOME/Software/boltz]: " BOLTZ_PATH
-BOLTZ_PATH=${BOLTZ_PATH:-"$HOME/Software/boltz"}
+NUTZ_PATH=${NUTZ_PATH:-"$HOME/Software/boltz-hpc-tools"}
 
 read -p "Conda environment name [boltz]: " CONDA_ENV
 CONDA_ENV=${CONDA_ENV:-"boltz"}
