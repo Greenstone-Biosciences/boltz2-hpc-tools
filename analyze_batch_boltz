@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 #
-#Script: Anal_boltz.sh
+#Script: Analyze_boltz_batch
 #Purpose: extracts boltz output affinity .json files into .csv format and combines for all files in a folder
-#Author: J_dog Leitz
+#Author: Jeremy Leitz
 #Date: 2025-08-23
-#Usage ./Anal_boltz.sh -i <input directory> -o <output directory> [-w]
+#Usage ./Analyze_boltz_batch -i <input directory> -o <output directory> [-w]
 #
 #Description:
-#Searches for affinity*affinity.json files in the Output directory and concatenates them and combines them into a csv file.
+#Searches for *affinity.json files in the Output directory and concatenates them and combines them into a csv file.
 #
 #Dependencies: Requires jq installed
 
@@ -38,7 +38,7 @@ done
 
 # Source the conda setup to make the `conda` command available.
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate boltz
+conda activate BOLTZ_CONDA_ENV
 
 #Create output directory, if needed.
 if [[ ! -d "$OutputDIR" ]]; then mkdir -p $OutputDIR; fi

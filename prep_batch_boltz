@@ -1,7 +1,7 @@
 #!/bin/bash
 #Boltz-2 slurm preparation script. 
 #This script takes as input the uniprot ID, smiles file, and a job (chunk) number.  The UniprotID will be used to fetch the .fasta from Uniprot and the smiles file will be split into <job number> chunks for processing. Then an sbach file will be produced that will run all the chunks (via Nutz.sh) as an array job.
-
+#Written by Jeremy Leitz
 
 set -e #Exit on error
 
@@ -78,7 +78,6 @@ cd $Output
 smiles="$Output/$(basename "$smiles_og")"
 mkdir -p $Output/Nutz
 mkdir -p $Output/Nutz/Ligand_yamls
-mkdir -p $Output/Nutz/Boltz_processed
 echo "Dowloading sequence for ${Prot_ID} to $Output"
 
 #Fetch the fasta sequence and save
@@ -100,8 +99,6 @@ else
 	echo "Couldn't find smiles file.  Looked for ${smiles}, are you sure it's there?"
 	exit 1
 fi
-#Generate the msa, if requested
-
 
 
 #Make slurm file
@@ -126,7 +123,7 @@ echo "#SBATCH --nodes=1
 #SBATCH --gpu-bind=single:1
 
 
-/home/jleitz/Software/VerdeLeitz_scripts/Boltz/Nutz.sh -i ${PWD}/Nutz -p ${PWD}/Nutz/${Prot_ID}.fasta${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
+NUTZ_PATH -i ${PWD}/Nutz -p ${PWD}/Nutz/${Prot_ID}.fasta${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
 
 #Give final run command.
 if [[ $job_num -gt 1 ]]; then

@@ -1,0 +1,12 @@
+version: 1  # Optional, defaults to 1
+sequences:
+  - protein:
+      id: A
+      sequence: <sequence>
+      msa: <msa>
+  - ligand:
+      id: B
+      smiles: <smile>
+properties:
+  - affinity:
+      binder: B
