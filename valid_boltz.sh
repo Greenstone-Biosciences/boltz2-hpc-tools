@@ -1,8 +1,8 @@
 #!/bin/bash
 ################################################################################
-# Script Name:    align_and_extract_ligands.sh
-# Description:    Align Boltz2 structures and calculate ligand centroids
-# Usage:          ./align_and_extract_ligands.sh -i INPUT_DIR [-o OUTPUT_DIR]
+# Script Name:    valid_boltz.sh
+# Description:    Align Boltz2 structures and calculate ligand centroids, binding pockets
+# Usage:          ./valid_boltz.sh -i INPUT_DIR [-o OUTPUT_DIR]
 ################################################################################
 
 
@@ -33,6 +33,7 @@ Optional Arguments:
 Requirements:
     - gemmi Python package
     - bc calculator
+    - (boltz) conda environment
 
 Input Requirements:
     - Directory must contain .cif files
@@ -422,6 +423,17 @@ done < "$CENTROID_FILE"
 
 echo ""
 echo "✓ Deviations saved to ligand_deviations.txt"
+
+################################################################################
+# STEP 4: DETERMINE BINDING POCKETS BY CLUSTERING
+################################################################################
+
+echo ""
+echo "Step 4: Identifying binding pockets via clustering"
+echo ""
+
+# Test line call with threshold 5
+python3 identify_pockets.py -i "$CENTROID_FILE" -o "$OUTPUT_DIR" -t 5.0 || echo "Clustering aborted, failed to identify pockets, continuing..."
 
 
 echo ""
