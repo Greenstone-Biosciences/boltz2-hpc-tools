@@ -1,0 +1,147 @@
+#!/bin/bash
+#Boltz-2 slurm preparation script. 
+#This script takes as input the uniprot ID, smiles file, and a job (chunk) number.  The UniprotID will be used to fetch the .fasta from Uniprot and the smiles file will be split into <job number> chunks for processing. Then an sbach file will be produced that will run all the chunks (via Nutz.sh) as an array job.
+
+
+set -e #Exit on error
+
+#Usage
+show_usage() {
+	echo "usage: $0 -p <uniprot_ID> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>]"
+	exit ${1:-0}
+}
+
+#Default values
+output="${PWD}/"
+job_num=1
+name="${Prot_ID}" #Default job name will be Uniprot_ID
+
+#Parse arguments
+while [[ $# -gt 0 ]]; do
+	key="$1"
+	case $key in
+		-p|--UniProtID)
+			Prot_ID="$2"
+			shift
+			shift
+			;;
+		-j|--Job_num)
+			job_num="$2"
+			shift
+			shift
+			;;
+
+		-s|--smiles)
+			smiles_og="$2"
+			shift
+			shift
+			;;
+		-o|--output)
+			Output="$2"
+			shift
+			shift
+			;;
+		-n|--name)
+			Run_name="$2"
+			shift
+			shift
+			;;
+		-m|--use_msa)
+			Use_MSA="$2"
+			shift
+			shift
+			;;
+		--rm_header)
+			rm_header_flag=true
+			shift
+			;;
+		-h|--help)
+			show_usage
+			;;
+		*)
+			echo "Unknown option $1"
+			show_usage 1
+			;;
+	esac
+done
+
+
+#Make output and move to it
+mkdir -p "$Output"
+#Copy file to output if it isn't already there
+if [[ ! -f $Output/$smiles_og ]]; then
+	cp $smiles_og $Output
+fi
+
+#Move to the Output Directory
+cd $Output
+smiles="$Output/$(basename "$smiles_og")"
+mkdir -p $Output/Nutz
+mkdir -p $Output/Nutz/Ligand_yamls
+mkdir -p $Output/Nutz/Boltz_processed
+echo "Dowloading sequence for ${Prot_ID} to $Output"
+
+#Fetch the fasta sequence and save
+curl -s "https://rest.uniprot.org/uniprotkb/${Prot_ID}.fasta" | tail -n +2 | tr -d '\n' > ${Output}/Nutz/${Prot_ID}.fasta
+echo "Sequence saved"
+
+#Split smiles into j Jobs
+if [ -f $smiles ]; then
+	echo "Found smiles file, splitting in to ${job_num} chunks. Placing chunks in to $Output/Nutz folder."
+	if [[ "$rm_header_flag" = "true" ]]; then
+		echo "User has indicated that the smiles file has a header, it is being removed.  Original smiles now moved to ${smiles}_OG"
+		cp "${smiles}" "${smiles}_OG"
+		sed -i '1d' ${smiles}
+	else
+		echo "User has indicated there is no header, using the smiles file as is."
+	fi
+		split -n l/${job_num} -d --suffix-length=4 $smiles Nutz/chunk_
+else
+	echo "Couldn't find smiles file.  Looked for ${smiles}, are you sure it's there?"
+	exit 1
+fi
+#Generate the msa, if requested
+
+
+
+#Make slurm file
+stamp=$(date +"%Y_%m_%d_%H%M")
+echo "#!/bin/bash" > Nutz/${Run_name}_${stamp}.slurm
+if [[ $job_num -gt 1 ]]; then
+	array_len=$(($job_num -1))
+	echo "#SBATCH --array=0-${array_len}" >> Nutz/${Run_name}_${stamp}.slurm
+else
+	echo "#SBATCH --array=0" >> Nutz/${Run_name}_${stamp}.slurm
+fi
+
+echo "#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=30
+#SBATCH --job-name=boltz_${Run_name}
+#SBATCH --error=boltz_%A_%a.err
+#SBATCH --output=boltz_%A_%a.out
+#SBATCH --partition=defq-gpu
+#SBATCH --gres=gpu:1
+#SBATCH --gpus-per-task=1       # number of GPUs per process
+#SBATCH --gpu-bind=single:1
+
+
+/home/jleitz/Software/VerdeLeitz_scripts/Boltz/Nutz.sh -i ${PWD}/Nutz -p ${PWD}/Nutz/${Prot_ID}.fasta${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
+
+#Give final run command.
+if [[ $job_num -gt 1 ]]; then
+	echo "
+	run job as:
+	
+	sbatch --array=0-${array_len} ${PWD}/Nutz/${Run_name}_${stamp}.slurm
+	
+	Good luck!!"
+else
+	echo "
+	run job as:
+
+	sbatch ${PWD}/Nutz/${Run_name}_${stamp}.slurm
+
+	Good luck!!"
+fi
+
