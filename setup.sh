@@ -11,7 +11,7 @@ BOLTZ_CONDA_ENV=${CONDA_ENV:-"boltz"}
 read -p "AFFINITY_TEMPLATE $NUTZ_PATH/affinity_template.yaml" AFFINITY_TEMPLATE
 
 # Replace in all scripts
-for script in boltz_batch_prepare Nutz.sh Analyze_boltz; do
+for script in prep_batch_boltz Nutz.sh analyze_batch_boltz; do
     sed -i "s|NUTZ_PATH=.*|NUTZ_PATH=\"$NUTZ_PATH\"|" $script
     sed -i "s|BOLTZ_CONDA_ENV=.*|BOLTZ_CONDA_ENV=\"$BOLTZ_CONDA_ENV\"|" $script
     sed -i "s|AFFINITY_TEMPLATE=.*|AFFINITY_TEMPLATE=\"$AFFINITY_TEMPLATE\"|" $script
