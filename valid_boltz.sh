@@ -34,6 +34,7 @@ Requirements:
     - gemmi Python package
     - bc calculator
     - (boltz) conda environment
+    - USalign
 
 Input Requirements:
     - Directory must contain .cif files
@@ -106,7 +107,7 @@ fi
 
 
 # Check for .cif files
-CIF_FILES=($(find "$INPUT_DIR" -maxdepth 1 -name "*.cif" -type f | sort))
+CIF_FILES=($(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort))
 CIF_COUNT=${#CIF_FILES[@]}
 
 if [[ $CIF_COUNT -eq 0 ]]; then
@@ -184,7 +185,7 @@ verbose = "$VERBOSE"
 print("Step 1: Retrieve .cifs and alignment")
 
 # Get all CIF files
-cif_files = sorted([str(f) for f in Path(input_dir).glob("*.cif")])
+cif_files = sorted([str(f) for f in Path(input_dir).glob("*/predictions/*/*.cif")])
 
 # Use first file as reference
 ref_file = cif_files[0]
@@ -252,7 +253,7 @@ for mobile_file in cif_files[1:]:
 		for chain in mobile_model:
 			for residue in chain:
 				for atom in residue:
-					atom.pos = sup.transform.apply(atom.pos)
+					atom.pos = gemmi.Position(sup.transform.apply(atom.pos))
 	
 		print(f"{mobile_basename:<50} {sup.rmsd:.3f}")
 #		print(f"Aligned {sup.count} matching CA atoms")
