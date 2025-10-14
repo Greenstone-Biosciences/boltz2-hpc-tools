@@ -129,6 +129,37 @@ def reassign_noise(labels):
 
     return new_labels
 
+def calculate_cluster_stats(coords, labels):
+    """Calculate statistics for each cluster.
+
+    Args:
+        coords: numpy array of coordinates
+        labels: Cluster labels
+
+    Returns:
+        stats: Dictionary of cluster statistics
+    """
+    stats = {}
+    unique_labels = np.unique(labels)
+
+    for label in unique_labels:
+        mask = labels == label
+        cluster_coords = coords[mask]
+
+        # Calculate centroid (center of a cluster here)
+        centroid = np.mean(cluster_coords, axis=0)
+
+        # Calculate spread (mean distance of cluster from centroid)
+        distances = np.linalg.norm(cluster_coords - centroid, axis=1)
+        spread = np.mean(distances)
+
+        stats[label] = {
+            'size': np.sum(mask),
+            'centroid': centroid,
+            'spread': spread
+        }
+
+    return stats
 
 
 def main():
@@ -153,11 +184,14 @@ def main():
 
     # Reassign noise points from clustering
     labels = reassign_noise(labels)
-    print(f"DEBUG, labels after reassigning noise: {labels}")
+    # print(f"DEBUG, labels after reassigning noise: {labels}")
 
     n_clusters = len(np.unique(labels))
     print(f"Identified {n_clusters} binding pocket(s)")
 
+    # Calculate stats of the clusters
+    stats = calculate_cluster_stats(coords, labels)
+    print(f"DEBUG, cluster stats: {stats}")
 
 
 if __name__ == "__main__":
