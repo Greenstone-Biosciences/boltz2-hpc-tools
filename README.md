@@ -41,9 +41,15 @@ conda install -c conda-forge jq # JSON processor
 4. Run the setup.sh script:
 ```
 bash
-cp config.template config.sh
-nano config.sh #Edit relevant paths to mach your system
+[super_cool_user]$ pwd
+/home/folder_that_makes_sense/boltz2-hpc-tools
+[super_cool_user]$ ./setup.sh
+Path to this repository [/home/jleitz/Software/PUBLIC/boltz2-hpc-tools?]: /home/folder_that_makes_sense/boltz2-hpc-tools
+Conda environment name [boltz]: my_boltz_env
+Path to the affinity_template yaml [/home/jleitz/Software/PUBLIC/boltz2-hpc-tools]: /home/folder_that_makes_sense/boltz2-hpc-tools
+Setup complete!
 ```
+
 
 ## Use
 These programs collecivetly and affectionately called "Nutz and Boltz" consist of a couple of wrapper scripts to run Boltz-2 using SLURM array jobs.
