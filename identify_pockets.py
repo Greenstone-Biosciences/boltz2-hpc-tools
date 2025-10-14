@@ -161,6 +161,45 @@ def calculate_cluster_stats(coords, labels):
 
     return stats
 
+def write_pocket_assignments(ligand_names, labels, output_dir):
+    """Write pocket assignments to file (of receptor-ligand combos).
+
+    Args:
+        ligand_names: List of structure names
+        labels: Cluster labels (0-indexed)
+        output_dir: Output directory
+
+    """
+    output_path = Path(output_dir) / "pocket_assignments.txt"
+
+    # Calculate cluster sizes
+    unique_labels = np.unique(labels)
+    cluster_sizes = {label: np.sum(labels==label) for label in unique_labels}
+
+    with open(output_path, 'w') as f:
+        f.write("# Structure Pocket Cluster_Size\n")
+        for name, label in zip(ligand_names, labels):
+            pocket_id = f"pocket{label + 1}" # Change pocket IDs to 1-indexed
+            cluster_size = cluster_sizes[label]
+            f.write(f"{name} {pocket_id} {cluster_size}\n")
+
+def write_cluster_stats(stats, output_dir):
+    """Write cluster statistics to file.
+
+    Args:
+        stats: Dictionary of cluster statistics
+        output_dir: Output directory
+    """
+    output_path = Path(output_dir) / "cluster_statistics.txt"
+
+    with open(output_path, 'w') as f:
+        f.write("# Pocket N_ligands Center_X Center_Y Center_Z Spread_Angstrom\n")
+        for label in sorted(stats.keys()):
+            pocket_id = f"pocket{label + 1}"
+            size = stats[label]['size']
+            cx, cy, cz = stats[label]['centroid']
+            spread = stats[label]['spread']
+            f.write(f"{pocket_id} {size} {cx:.3f} {cy:.3f} {cz:.3f} {spread:.3f}\n")
 
 def main():
     """Main function"""
@@ -191,7 +230,37 @@ def main():
 
     # Calculate stats of the clusters
     stats = calculate_cluster_stats(coords, labels)
-    print(f"DEBUG, cluster stats: {stats}")
+   #  print(f"DEBUG, cluster stats: {stats}")
+
+    # Write pocket assingment outputs and clusters stats to files
+    print(f"\nWriting results to: {args.output}/")
+    write_pocket_assignments(ligand_names, labels, args.output)
+    print(f" - pocket_assignments.txt")
+    write_cluster_stats(stats, args.output)
+    print(f" - cluster_statistics.txt")
+
+    # Print a summary
+    print("\nPocket Summary:")
+    print(f"{'Pocket':<10} {'N Ligands':<12} {'Spread (Å)':<12} {'Quality'}")
+    print("-" * 50)
+    for label in sorted(stats.keys()):
+        pocket_id = f"pocket{label + 1}"
+        size = stats[label]['size']
+        spread = stats[label]['spread']
+
+    # Spread qualifiers, can adjust
+        if size ==1:
+            quality = "○ Singleton (no clustering)"
+        elif spread < 2.0:
+            quality = "✓ Tight"
+        elif spread < 5.0:
+            quality = "~ Moderate"
+        else:
+            quality = "✗ Loose"
+
+        print(f"{pocket_id:<10} {size:<12} {spread:<12.3f} {quality}")
+
+    print("\n✓ Pocket identification complete")
 
 
 if __name__ == "__main__":
