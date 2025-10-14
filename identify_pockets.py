@@ -109,14 +109,35 @@ def cluster_ligands(coords, eps, min_samples):
     return labels
 
 
+def reassign_noise(labels):
+    """Reassign noise points labeled as (-1) to unique pocket IDs. They will be made the highest number.
+
+    Args:
+        labels: Original cluster labels
+
+    Returns:
+        new_labels: Labels with noise points reassigned
+    """
+
+    new_labels = labels.copy()
+    max_label = max(labels) if len(labels) > 0 else -1
+
+    for i, label in enumerate(new_labels):
+        if label == -1:
+            max_label += 1
+            new_labels[i] = max_label
+
+    return new_labels
 
 
 
 def main():
     """Main function"""
 
+    # Parse arguments
     args = parse_args()
 
+    # Reads centroids from file
     print(f"Reading centroids from: {args.input}")
     ligand_names, coords = read_centroids(args.input)
     print(f"Found {len(ligand_names)} ligands")
@@ -125,9 +146,18 @@ def main():
 #    print(f"DEBUG, ligand names: {ligand_names}")
 #    print(f"DEBUG, coords: {coords}")
 
+    # Clusters ligand centroids
     print(f"\nClustering with DBSCAN (eps={args.threshold} Å, min_samples={args.min_samples})")
     labels = cluster_ligands(coords, args.threshold, args.min_samples)
 #    print(f"DEBUG, labels after clustering: {labels}")
+
+    # Reassign noise points from clustering
+    labels = reassign_noise(labels)
+    print(f"DEBUG, labels after reassigning noise: {labels}")
+
+    n_clusters = len(np.unique(labels))
+    print(f"Identified {n_clusters} binding pocket(s)")
+
 
 
 if __name__ == "__main__":
