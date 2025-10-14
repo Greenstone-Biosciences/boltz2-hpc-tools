@@ -44,9 +44,9 @@ bash
 [super_cool_user]$ pwd
 /home/folder_that_makes_sense/boltz2-hpc-tools
 [super_cool_user]$ ./setup.sh
-Path to this repository [/home/jleitz/Software/PUBLIC/boltz2-hpc-tools?]: /home/folder_that_makes_sense/boltz2-hpc-tools
+Path to this repository [/home/folder_that_makes_sense/boltz2-hpc-tools?]: /home/folder_that_makes_sense/boltz2-hpc-tools
 Conda environment name [boltz]: my_boltz_env
-Path to the affinity_template yaml [/home/jleitz/Software/PUBLIC/boltz2-hpc-tools]: /home/folder_that_makes_sense/boltz2-hpc-tools
+Path to the affinity_template yaml [/home/folder_that_makes_sense/boltz2-hpc-tools]: /home/folder_that_makes_sense/boltz2-hpc-tools
 Setup complete!
 ```
 
@@ -68,7 +68,7 @@ The output will be a .slurm submission file. This file should be modified as nee
 
 Each SMILE string will generate a boltz_results_IDENTIFYIER folder within the Ligand_Yamls directory in Nutz. 
 
-3) Analyze the entire Ligand_yamls directory and concatinate output into a file conmbine.csv in the output directory. Optionally overwrite an existing combine.csv file in the same directory using the -w flag.
+3) Analyze the entire Ligand_yamls directory and concatinate output into a file combine.csv in the output directory. Optionally overwrite an existing combine.csv file in the same directory using the -w flag.
 
 ```
 ./analyze_batch_boltz -i <Input Directory that contains 'Ligand_yamls' directory> -o <Output Directory> [-w/--overwrite]
@@ -80,16 +80,15 @@ Please feel free to contact us (me) with suggestions or changes.
 
 ## Acknowledgment
 
+**Boltz Workflow Scripts for HPC**
+Developed by Jeremy Leitz @ Greenstone Biosciences
+https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
 If you use these scripts in your work, please link to or acknowledge this repository:
 ```
 https://github.com/Greenstone-Biosciences/boltz2-hpc-tools.git
 ```
 
-**Boltz Workflow Scripts for HPC**  
-Developed by Jeremy Leitz @ Greenstone Biosciences  
-https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
-
-If you use Boltz in your research, please cite:
+If you use *Boltz-1/2* in your research, please cite:
 ```
 @article{passaro2025boltz2,
   author = {Passaro, Saro and Corso, Gabriele and Wohlwend, Jeremy and Reveiz, Mateo and Thaler, Stephan and Somnath, Vignesh Ram and Getz, Noah and Portnoi, Tally and Roy, Julien and Stark, Hannes and Kwabi-Addo, David and Beaini, Dominique and Jaakkola, Tommi and Barzilay, Regina},

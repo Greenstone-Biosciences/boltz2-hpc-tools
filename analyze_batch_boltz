@@ -1,10 +1,11 @@
 #!/bin/bash
-#
-#
 #Script: Analyze_boltz_batch
 #Purpose: extracts boltz output affinity .json files into .csv format and combines for all files in a folder
-#Author: Jeremy Leitz
+#Author: Jeremy Leitz @ Greenstone Biosciences
+#https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
 #Date: 2025-08-23
+
+
 #Usage ./Analyze_boltz_batch -i <input directory> -o <output directory> [-w]
 #
 #Description:

@@ -1,7 +1,8 @@
 #!/bin/bash
 #Boltz-2 slurm preparation script. 
 #This script takes as input the uniprot ID, smiles file, and a job (chunk) number.  The UniprotID will be used to fetch the .fasta from Uniprot and the smiles file will be split into <job number> chunks for processing. Then an sbach file will be produced that will run all the chunks (via Nutz.sh) as an array job.
-#Written by Jeremy Leitz
+#Written by Jeremy Leitz @ Greenstone Biosciences
+#https://https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
 
 set -e #Exit on error
 

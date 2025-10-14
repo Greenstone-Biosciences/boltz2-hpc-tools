@@ -2,7 +2,8 @@
 #This is for running boltz-2 on a group of ligands
 #Input is file containing smiles and names of ligands
 #Requires that user has already run prep_batch_boltz which fetches protein fasta and optionally splits the smiles file by array task and generates sbatch executable
-#Written by Jeremy Leitz
+#Written by Jeremy Leitz @ Greenstone Biosciences
+#https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
 
 start_time=$(date +%s)
 Usage="Usage: $0 -i|--input <input_file> -p|--prot_fasta <prot_fasta_file> [-m|--use_msa]"
