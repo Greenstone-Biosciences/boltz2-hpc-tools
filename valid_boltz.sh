@@ -5,8 +5,8 @@
 # Usage:          ./valid_boltz.sh -i INPUT_DIR [-o OUTPUT_DIR]
 ################################################################################
 
-
 # Default values
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 INPUT_DIR=""
 OUTPUT_DIR=""
 VERBOSE=false
@@ -55,35 +55,35 @@ EOF
 
 # Parse Arguments
 while [[ $# -gt 0 ]]; do
-       case $1 in
-       		-i|--input)
-			if [[ -z "$2" || "$2" == -* ]]; then
-				echo "Error: -i|--input requires a directory path" >&2
-				exit 1
-			fi
-			INPUT_DIR="$2"
-			shift 2
-			;;
-		-o|--output)
-			if [[ -z "$2" || "$2" == -* ]]; then
-				echo "Error: -o|--output requires a directory path" >&2
-				exit 1
-			fi
-			OUTPUT_DIR="$2"
-			shift 2
-			;;
-		-v|--verbose)
-			VERBOSE=true
-			shift
-			;;
-		-h|--help)
-			show_help
-			;;
-		*)
-			echo "Error: Unknown option: $1" >&2
-			echo "Use -h or --help for usage information" >&2
-			exit 1
-	esac
+    case $1 in
+        -i|--input)
+            # Input directory validation
+            INPUT_DIR="$2"
+            shift 2
+            ;;
+        -o|--output)
+            # Output directory
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -t|--threshold)
+            # Clustering threshold in Angstroms
+            CLUSTER_THRESHOLD="$2"
+            shift 2
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            ;;
+        *)
+            echo "Error: Unknown option: $1" >&2
+            echo "Use -h or --help for usage information" >&2
+            exit 1
+            ;;
+    esac
 done
 
 
@@ -92,14 +92,13 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate boltz
 
 
-# Validate required arguments
+# Validate input directory requirements
 if [[ -z "$INPUT_DIR" ]]; then
 	echo "Error: Missing required argument -i|--input" >&2
 	echo "Use -h or --help for usage information" >&2
 	exit 1
 fi
 
-# Validate input directory exists
 if [[ ! -d "$INPUT_DIR" ]]; then
 	echo "Error: Input directory '$INPUT_DIR' not found" >&2
 	exit 1
@@ -107,7 +106,7 @@ fi
 
 
 # Check for .cif files
-CIF_FILES=($(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort))
+mapfile -t CIF_FILES < <(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort)
 CIF_COUNT=${#CIF_FILES[@]}
 
 if [[ $CIF_COUNT -eq 0 ]]; then
@@ -137,6 +136,24 @@ rm "$OUTPUT_DIR/.write_test"
 # Create subdirectories
 mkdir -p "$OUTPUT_DIR/aligned_cifs"
 mkdir -p "$OUTPUT_DIR/logs"
+
+# Check gemmi is available in environment
+if ! python3 -c "import gemmi" 2>/dev/null; then
+    echo "Error: gemmi not found. Install with: pip install gemmi" >&2
+    exit 1
+fi
+
+# Check scikit-learn (for clustering)
+if ! python3 -c "import sklearn" 2>/dev/null; then
+    echo "Warning: scikit-learn not found. Pocket identification will be skipped." >&2
+    echo "Install with: pip install scikit-learn" >&2
+fi
+
+# Check bc is available
+if ! command -v bc &> /dev/null; then
+    echo "Error: bc calculator not found" >&2
+    exit 1
+fi
 
 # Check if US-align is available
 if ! command -v USalign &> /dev/null; then
@@ -433,8 +450,26 @@ echo ""
 echo "Step 4: Identifying binding pockets via clustering"
 echo ""
 
-# Test line call with threshold 5
-python3 identify_pockets.py -i "$CENTROID_FILE" -o "$OUTPUT_DIR" -t 5.0 || echo "Clustering aborted, failed to identify pockets, continuing..."
+# Check if identify_pockets.py exists
+POCKET_SCRIPT="$SCRIPT_DIR/identify_pockets.py"
+if [[ ! -f "$POCKET_SCRIPT" ]]; then
+    echo "Warning: $POCKET_SCRIPT not found in current directory" >&2
+    echo "Skipping pocket identification." >&2
+else
+    # Run pocket identification
+    python3 "$POCKET_SCRIPT" \
+        -i "$CENTROID_FILE" \
+        -o "$OUTPUT_DIR" \
+        -t "${CLUSTER_THRESHOLD:-5.0}"
+
+    if [[ $? -eq 0 ]]; then
+        echo ""
+        echo "✓ Pocket identification complete"
+    else
+        echo "Error: Pocket identification failed" >&2
+        echo "Continuing with available results..." >&2
+    fi
+fi
 
 
 echo ""
@@ -445,4 +480,8 @@ echo "Output files:"
 echo "  aligned_cifs/           Aligned structures"
 echo "  ligand_centers.txt      Ligand centroids"
 echo "  ligand_deviations.txt   Distances from average"
+if [[ -f "$OUTPUT_DIR/pocket_assignments.txt" ]]; then
+    echo "  pocket_assignments.txt  Pocket IDs per ligand"
+    echo "  cluster_statistics.txt  Per-pocket cluster statistics"
+fi
 echo "========================================"
