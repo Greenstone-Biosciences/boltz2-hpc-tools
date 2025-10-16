@@ -4,7 +4,7 @@
 Identify binding pockets via DBSCAN clustering of ligand centroids.
 
 Usage:
-    python3 identify_pockets.py -i ligand_centers.txt -o output_dir [-t 5.0]
+    python3 identify_pockets.py -i ligand_centers.csv -o output_dir [-t 5.0]
 
 """
 
@@ -12,6 +12,7 @@ Usage:
 import argparse
 import sys
 import numpy as np
+import csv
 from pathlib import Path
 
 def parse_args():
@@ -22,7 +23,7 @@ def parse_args():
     parser.add_argument(
         "-i", "--input",
         required=True,
-        help="Input file containing ligand centroids (e.g. ligand_centers.txt)"
+        help="Input file containing ligand centroids (e.g. ligand_centers.csv)"
     )
     parser.add_argument(
         "-o", "--output",
@@ -47,7 +48,7 @@ def read_centroids(filepath):
     """Read ligand centroids from file. File contain header, .cif of protein with ligand then x, y, z coordinates of ligand centroids.
 
     Args:
-        filepath: Path to ligand_centers.txt
+        filepath: Path to ligand_centers.csv
 
     Returns:
         ligand_names: List of structure names
@@ -59,12 +60,13 @@ def read_centroids(filepath):
 
     try:
         with open(filepath, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                if not row:
                     continue
+                parts = row
 
-                parts = line.split()
                 if len(parts) < 4:
                     continue
 
@@ -170,18 +172,18 @@ def write_pocket_assignments(ligand_names, labels, output_dir):
         output_dir: Output directory
 
     """
-    output_path = Path(output_dir) / "pocket_assignments.txt"
+    output_path = Path(output_dir) / "pocket_assignments.csv"
 
     # Calculate cluster sizes
     unique_labels = np.unique(labels)
     cluster_sizes = {label: np.sum(labels==label) for label in unique_labels}
 
-    with open(output_path, 'w') as f:
-        f.write("# Structure Pocket Cluster_Size\n")
+    with open(output_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Structure', 'Pocket', 'Cluster_Size'])
         for name, label in zip(ligand_names, labels):
-            pocket_id = f"pocket{label + 1}" # Change pocket IDs to 1-indexed
-            cluster_size = cluster_sizes[label]
-            f.write(f"{name} {pocket_id} {cluster_size}\n")
+            cluster_size = np.sum(labels == label)
+            writer.writerow([name, f"pocket{label + 1}", cluster_size]) # Change pocket IDs to 1-indexed
 
 def write_cluster_stats(stats, output_dir):
     """Write cluster statistics to file.
@@ -190,16 +192,18 @@ def write_cluster_stats(stats, output_dir):
         stats: Dictionary of cluster statistics
         output_dir: Output directory
     """
-    output_path = Path(output_dir) / "cluster_statistics.txt"
+    output_path = Path(output_dir) / "cluster_statistics.csv"
 
-    with open(output_path, 'w') as f:
-        f.write("# Pocket N_ligands Center_X Center_Y Center_Z Spread_Angstrom\n")
+    with open(output_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Pocket', 'N_ligands', 'Center_X', 'Center_Y', 'Center_Z', 'Spread_Angstrom'])
         for label in sorted(stats.keys()):
             pocket_id = f"pocket{label + 1}"
             size = stats[label]['size']
             cx, cy, cz = stats[label]['centroid']
             spread = stats[label]['spread']
-            f.write(f"{pocket_id} {size} {cx:.3f} {cy:.3f} {cz:.3f} {spread:.3f}\n")
+            writer.writerow([pocket_id, size, f"{cx:.3f}", f"{cy:.3f}", f"{cz:.3f}", f"{spread:.3f}"])
+
 
 def main():
     """Main function"""
@@ -235,9 +239,9 @@ def main():
     # Write pocket assingment outputs and clusters stats to files
     print(f"\nWriting results to: {args.output}/")
     write_pocket_assignments(ligand_names, labels, args.output)
-    print(f" - pocket_assignments.txt")
+    print(f" - pocket_assignments.csv")
     write_cluster_stats(stats, args.output)
-    print(f" - cluster_statistics.txt")
+    print(f" - cluster_statistics.csv")
 
     # Print a summary
     print("\nPocket Summary:")

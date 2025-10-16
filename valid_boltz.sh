@@ -48,10 +48,10 @@ Input Requirements:
 
 Output:
     - aligned_cifs/           Aligned .cif files (protein + ligand)
-    - ligand_centers.txt      Ligand center of mass coordinates
-    - ligand_deviations.txt   Distance from average position
-    - pocket_assignments.txt  Pocket IDs per ligand"
-    - cluster_statistics.txt  Per-pocket cluster statistics"
+    - ligand_centers.csv      Ligand center of mass coordinates
+    - ligand_deviations.csv   Distance from average position
+    - pocket_assignments.csv  Pocket IDs per ligand"
+    - cluster_statistics.csv  Per-pocket cluster statistics"
 
 Examples:
     ${0##*/} -i ./my_unaligned_cifs/
@@ -368,8 +368,8 @@ echo ""
 echo "Step 2: Extracting ligand centers of mass from aligned structures"
 echo ""
 
-CENTROID_FILE="$OUTPUT_DIR/ligand_centers.txt"
-echo "# File X Y Z N_atoms" > "$CENTROID_FILE"
+CENTROID_FILE="$OUTPUT_DIR/ligand_centers.csv"
+echo "Structure,X,Y,Z,N_atoms" > "$CENTROID_FILE"
 
 printf "%-50s %35s %10s\n" "Structure" "Ligand Centroid (x, y, z)" "# Atoms"
 echo "--------------------------------------------------------------------------------"
@@ -412,13 +412,13 @@ for CIF in "$OUTPUT_DIR/aligned_cifs"/*.cif; do
 	CENT_Z=$(echo "scale=3; $SUM_Z / $N_ATOMS" | bc)
 	
 	# Save to file
-	echo "$BASENAME $CENT_X $CENT_Y $CENT_Z $N_ATOMS" >> "$CENTROID_FILE"
+	echo "$BASENAME,$CENT_X,$CENT_Y,$CENT_Z,$N_ATOMS" >> "$CENTROID_FILE"
 	
 	printf "%-50s (%8.3f, %8.3f, %8.3f) %10s\n" "$BASENAME" "$CENT_X" "$CENT_Y" "$CENT_Z" "$N_ATOMS"
 done
 
 echo ""
-echo "✓ Ligand centers extracted and saved to ligand_centers.txt"
+echo "✓ Ligand centers extracted and saved to ligand_centers.csv"
 
 
 
@@ -437,8 +437,8 @@ SUM_Y=0
 SUM_Z=0
 COUNT=0
 
-while read -r FILE X Y Z N; do
-	[[ "$FILE" == "#"* ]] && continue
+while IFS=',' read -r FILE X Y Z N; do
+	[[ "$STRUCTURE" == "Structure" ]] && continue
 	SUM_X=$(echo "$SUM_X + $X" | bc)
 	SUM_Y=$(echo "$SUM_Y + $Y" | bc)
 	SUM_Z=$(echo "$SUM_Z + $Z" | bc)
@@ -466,15 +466,15 @@ echo "  Based on $COUNT ligand poses"
 echo ""
 
 # Calculate deviations from average
-DEVIATIONS_FILE="$OUTPUT_DIR/ligand_deviations.txt"
-echo "# File Distance_from_average Direction_X Direction_Y Direction_Z" > "$DEVIATIONS_FILE"
+DEVIATIONS_FILE="$OUTPUT_DIR/ligand_deviations.csv"
+echo "Structure,Distance_from_average,Direction_X,Direction_Y,Direction_Z" > "$DEVIATIONS_FILE"
 
 printf "%-50s %15s %30s\n" "Structure" "Distance (Å)" "Direction Vector (x, y, z)"
 echo "--------------------------------------------------------------------------------"
 
 
-while read -r FILE X Y Z N; do
-	[[ "$FILE" == "#"* ]] && continue
+while IFS=',' read -r FILE X Y Z N; do
+	[[ "$STRUCTURE" == "Structure" ]] && continue
 
 	# Calculate distance from average (magnitude)
 	DX=$(echo "$X - $AVG_X" | bc)
@@ -495,7 +495,7 @@ while read -r FILE X Y Z N; do
 	fi
 
 	# Safe to file
-	echo "$FILE $DIST $NORM_X $NORM_Y $NORM_Z" >> "$DEVIATIONS_FILE"
+	echo "$FILE,$DIST,$NORM_X,$NORM_Y,$NORM_Z" >> "$DEVIATIONS_FILE"
 
 	printf "%-50s %15.3f (%6.3f, %6.3f, %6.3f)\n" "$FILE" "$DIST" "$NORM_X" "$NORM_Y" "$NORM_Z"
 
@@ -503,7 +503,7 @@ done < "$CENTROID_FILE"
 
 
 echo ""
-echo "✓ Deviations saved to ligand_deviations.txt"
+echo "✓ Deviations saved to ligand_deviations.csv"
 
 ################################################################################
 # STEP 4: DETERMINE BINDING POCKETS BY CLUSTERING
@@ -541,10 +541,10 @@ echo "Analysis Complete!"
 echo "========================================"
 echo "Output files:"
 echo "  aligned_cifs/           Aligned structures"
-echo "  ligand_centers.txt      Ligand centroids"
-echo "  ligand_deviations.txt   Distances from average"
-if [[ -f "$OUTPUT_DIR/pocket_assignments.txt" ]]; then
-    echo "  pocket_assignments.txt  Pocket IDs per ligand"
-    echo "  cluster_statistics.txt  Per-pocket cluster statistics"
+echo "  ligand_centers.csv      Ligand centroids"
+echo "  ligand_deviations.csv   Distances from average"
+if [[ -f "$OUTPUT_DIR/pocket_assignments.csv" ]]; then
+    echo "  pocket_assignments.csv  Pocket IDs per ligand"
+    echo "  cluster_statistics.csv  Per-pocket cluster statistics"
 fi
 echo "========================================"
