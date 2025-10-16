@@ -10,6 +10,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 INPUT_DIR=""
 OUTPUT_DIR=""
 VERBOSE=false
+CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-5.0}"
+DRY_RUN=false
 
 # Help message
 show_help() {
@@ -30,6 +32,7 @@ Optional Arguments:
     -o, --output DIR          Output directory (default: ./analysis_output)
     -t, --threshold FLOAT     Clustering threshold in Å (default: 5.0)
                               Set via CLUSTER_THRESHOLD environment variable
+    --dry-run                 Show what files would be processed without running analysis
     -v, --verbose             Verbose output
     -h, --help                Show this help message
 
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
             CLUSTER_THRESHOLD="$2"
             shift 2
             ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         -v|--verbose)
             VERBOSE=true
             shift
@@ -111,14 +118,41 @@ if [[ ! -d "$INPUT_DIR" ]]; then
 fi
 
 
-# Check for .cif files
-mapfile -t CIF_FILES < <(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort)
+# Check for .cif files - conditional detection for Boltz2 output structures
+# mapfile -t CIF_FILES < <(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort)
+if find "$INPUT_DIR" -type d -name "Ligand_yamls" -maxdepth 3 2>/dev/null | grep -q .; then
+    echo "Detected Boltz2 output structure, using predictions pattern..."
+    mapfile -t CIF_FILES < <(find "$INPUT_DIR" -path "*/predictions/*/*.cif" -type f | sort)
+else
+    echo "No Ligand_yamls folder detected, searching for all CIF files..."
+    mapfile -t CIF_FILES < <(find "$INPUT_DIR" -name "*.cif" -type f | sort)
+fi
+
 CIF_COUNT=${#CIF_FILES[@]}
 
 if [[ $CIF_COUNT -eq 0 ]]; then
 	echo "Error: No .cif files found in '$INPUT_DIR'" >&2
 	exit 1
 fi
+
+# Dry run: show what would be processed and exit
+if [[ "$DRY_RUN" == true ]]; then
+    echo ""
+    echo "========================================"
+    echo "DRY RUN MODE - No files will be processed"
+    echo "========================================"
+    echo "Would process $CIF_COUNT CIF files"
+    echo ""
+    echo "First 10 files:"
+    printf '  %s\n' "${CIF_FILES[@]}" | head -10
+    if [[ $CIF_COUNT -gt 10 ]]; then
+        echo " ... and $((CIF_COUNT - 10)) more files"
+    fi
+    echo ""
+    echo "Exiting (no processing performed)"
+    exit 0
+fi
+
 
 # Set default output directory if not provided
 OUTPUT_DIR="${OUTPUT_DIR:-./analysis_output}"
@@ -207,8 +241,31 @@ verbose = "$VERBOSE"
 
 print("Step 1: Retrieve .cifs and alignment")
 
-# Get all CIF files
-cif_files = sorted([str(f) for f in Path(input_dir).glob("*/predictions/*/*.cif")])
+# Get all CIF files - match bash logic for Boltz2 structure detection
+# DEPRECATED cif_files = sorted([str(f) for f in Path(input_dir).glob("*/predictions/*/*.cif")])
+input_path = Path(input_dir)
+
+# Check if Boltz2 directory structure exists (look for Ligand_yamls directory)
+ligand_yamls_dirs = list(input_path.glob("**/Ligand_yamls"))
+
+if ligand_yamls_dirs:
+    # Boltz2 directory structure: search within Ligand_yamls for predictions pattern
+    if verbose:
+        print("Detected Boltz2 structure, using predicions pattern")
+    cif_files = []
+    for lyd in ligand_yamls_dirs:
+        cif_files.extend(lyd.glob("*/predictions/*/*.cif"))
+    cif_files = sorted([str(f) for f in cif_files])
+else:
+    # Flat directory structure: find any CIF files
+    if verbose:
+        print("No Ligand_yamls detected, searching for all CIF files")
+    cif_files = sorted([str(f) for f in input_path.glob("**/*.cif")])
+
+if not cif_files:
+    print("Error: No .cif files found", file=sys.stderr)
+    sys.exit(1)
+
 
 # Use first file as reference
 ref_file = cif_files[0]
