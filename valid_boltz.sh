@@ -21,18 +21,22 @@ Aligns .cifs protein structures and calculates ligand centroids
   1. Aligning all protein structures using gemmi
   2. Parsing aligned .cif files to extract ligand and calculate ligand centroids
   3. Calculated average position of all ligands and individual ligand distances
+  4. Clusters ligand centroids to identify and assign binding pockets
 
 Required Arguments:
     -i, --input DIR           Directory containing .cif files
 
 Optional Arguments:
     -o, --output DIR          Output directory (default: ./analysis_output)
+    -t, --threshold FLOAT     Clustering threshold in Å (default: 5.0)
+                              Set via CLUSTER_THRESHOLD environment variable
     -v, --verbose             Verbose output
     -h, --help                Show this help message
 
 Requirements:
     - gemmi Python package
     - bc calculator
+    - identify_pockets.py (in same directory)
     - (boltz) conda environment
     - USalign
 
@@ -43,6 +47,8 @@ Output:
     - aligned_cifs/           Aligned .cif files (protein + ligand)
     - ligand_centers.txt      Ligand center of mass coordinates
     - ligand_deviations.txt   Distance from average position
+    - pocket_assignments.txt  Pocket IDs per ligand"
+    - cluster_statistics.txt  Per-pocket cluster statistics"
 
 Examples:
     ${0##*/} -i ./my_unaligned_cifs/

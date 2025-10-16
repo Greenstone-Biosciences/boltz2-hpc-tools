@@ -260,7 +260,6 @@ def main():
 
         print(f"{pocket_id:<10} {size:<12} {spread:<12.3f} {quality}")
 
-    print("\n✓ Pocket identification complete")
 
 
 if __name__ == "__main__":
