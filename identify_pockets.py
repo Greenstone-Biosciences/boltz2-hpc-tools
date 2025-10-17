@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+#Written by Chris Yan
 """
 Identify binding pockets via DBSCAN clustering of ligand centroids.
 
