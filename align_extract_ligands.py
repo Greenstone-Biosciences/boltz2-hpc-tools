@@ -5,7 +5,7 @@ Align Boltz2 protein structures and extract ligand centroids.
 Can be run standalone or imported as a module.
 
 Usage:
-    python align_and_extract_ligands.py -i INPUT_DIR -o OUTPUT_DIR [--save-aligned] [-v]
+    python align_extract_ligands.py -i INPUT_DIR -o OUTPUT_DIR [--save-aligned] [-v]
 """
 
 import argparse
