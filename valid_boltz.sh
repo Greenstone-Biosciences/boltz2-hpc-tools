@@ -13,6 +13,7 @@ OUTPUT_DIR=""
 VERBOSE=false
 CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-5.0}"
 DRY_RUN=false
+SAVE_ALIGNED=false #Default: do not save aligned CIFs
 
 # Help message
 show_help() {
@@ -33,6 +34,7 @@ Optional Arguments:
     -o, --output DIR          Output directory (default: ./analysis_output)
     -t, --threshold FLOAT     Clustering threshold in Å (default: 5.0)
                               Set via CLUSTER_THRESHOLD environment variable
+    --save-aligned            Save aligned CIF files (default: false)
     --dry-run                 Show what files would be processed without running analysis
     -v, --verbose             Verbose output
     -h, --help                Show this help message
@@ -40,15 +42,17 @@ Optional Arguments:
 Requirements:
     - gemmi Python package
     - bc calculator
-    - identify_pockets.py (in same directory)
+    - numpy Python package
+    - scikit-learn Python package
     - (boltz) conda environment
-    - USalign
+    - align_and_extract_ligands.py (in same directory)
+    - identify_pockets.py (in same directory)
 
 Input Requirements:
     - Directory must contain .cif files
 
 Output:
-    - aligned_cifs/           Aligned .cif files (protein + ligand)
+    - aligned_cifs/           Aligned .cif files (only if --save-aligned)
     - ligand_centers.csv      Ligand center of mass coordinates
     - ligand_deviations.csv   Distance from average position
     - pocket_assignments.csv  Pocket IDs per ligand"
@@ -80,6 +84,10 @@ while [[ $# -gt 0 ]]; do
             # Clustering threshold in Angstroms
             CLUSTER_THRESHOLD="$2"
             shift 2
+            ;;
+        --save-aligned)
+            SAVE_ALIGNED=false
+            shift
             ;;
         --dry-run)
             DRY_RUN=true
@@ -197,11 +205,11 @@ if ! command -v bc &> /dev/null; then
 fi
 
 # Check if US-align is available
-if ! command -v USalign &> /dev/null; then
-	echo "Error: US-align not found in PATH" >&2
-	echo "Please install US-align or ensure it's in your conda environment" >&2
-	exit 1
-fi
+#if ! command -v USalign &> /dev/null; then
+#	echo "Error: US-align not found in PATH" >&2
+#	echo "Please install US-align or ensure it's in your conda environment" >&2
+#	exit 1
+#fi
 
 # Log function
 log() {
@@ -213,214 +221,64 @@ log() {
 
 
 # Print configuration
-echo "========================================"
+echo "============================================"
 echo "Boltz2 Docking Analysis"
-echo "========================================"
-echo "Input directory:   $INPUT_DIR"
-echo "Output directory:  $OUTPUT_DIR"
-echo "CIF files found:   $CIF_COUNT"
-echo "========================================"
+echo "============================================"
+echo "Input directory:      $INPUT_DIR"
+echo "Output directory:     $OUTPUT_DIR"
+echo "CIF files found:      $CIF_COUNT"
+echo "Cluster threashold:   $CLUSTER_THRESHOLD Å"
+echo "Save aligned:         $SAVE_ALIGNED"
+echo "============================================"
 echo ""
 
 log "Starting analysis pipeline of .cifs..."
 echo ""
 
 
-##################################################
-## Step 1: Retrieve .cifs and alignment
-##################################################
-# Run alignment and extract ligand centers of mass
-python3 << EOF
-import gemmi
-import sys
-import os
-from pathlib import Path
+###############################################################################
+## STEP 1-2: ALIGN STRUCTURES AND EXTRACT LIGAND CENTROIDS
+###############################################################################
 
-input_dir = "$INPUT_DIR"
-output_dir = "$OUTPUT_DIR"
-verbose = "$VERBOSE"
+echo "Steps 1-2: Aligning structures and extracting ligand centroids"
+echo ""
 
-print("Step 1: Retrieve .cifs and alignment")
-
-# Get all CIF files - match bash logic for Boltz2 structure detection
-# DEPRECATED cif_files = sorted([str(f) for f in Path(input_dir).glob("*/predictions/*/*.cif")])
-input_path = Path(input_dir)
-
-# Check if Boltz2 directory structure exists (look for Ligand_yamls directory)
-ligand_yamls_dirs = list(input_path.glob("**/Ligand_yamls"))
-
-if ligand_yamls_dirs:
-    # Boltz2 directory structure: search within Ligand_yamls for predictions pattern
-    if verbose:
-        print("Detected Boltz2 structure, using predicions pattern")
-    cif_files = []
-    for lyd in ligand_yamls_dirs:
-        cif_files.extend(lyd.glob("*/predictions/*/*.cif"))
-    cif_files = sorted([str(f) for f in cif_files])
-else:
-    # Flat directory structure: find any CIF files
-    if verbose:
-        print("No Ligand_yamls detected, searching for all CIF files")
-    cif_files = sorted([str(f) for f in input_path.glob("**/*.cif")])
-
-if not cif_files:
-    print("Error: No .cif files found", file=sys.stderr)
-    sys.exit(1)
-
-
-# Use first file as reference
-ref_file = cif_files[0]
-ref_basename = os.path.basename(ref_file)
-ref_name = os.path.splitext(ref_basename)[0]  # Remove .cif extension
-
-# Load reference structure and extract protein polymer
-print("Loading reference structure")
-print(f"Reference: {ref_basename}\n")
-
-# Load reference structure
-ref_st = gemmi.read_structure(ref_file)
-ref_model = ref_st[0]
-
-# Get reference polymer (protein chain for alignment)
-ref_polymer = None
-for chain in ref_model:
-	poly = chain.get_polymer()
-	if poly:
-		ref_polymer = poly
-		if verbose:
-			print(f"Found polymer in chain {chain.name}: {len(poly)} residues")
-		break
-
-# Save reference structure to output_dir
-ref_output = os.path.join(output_dir, "aligned_cifs", f"{ref_name}_aligned.cif")
-ref_st.make_mmcif_document().write_file(ref_output)
-print(f"Wrote reference file to {ref_output}")
-
-
-print(f"\n{'Structure':<50} {'RMSD (Å)'}")
-print("-" * 65)
-print(f"{ref_basename:<50} {'0.0000'}")
-
-for mobile_file in cif_files[1:]:
-	mobile_basename = os.path.basename(mobile_file)
-	mobile_name = os.path.splitext(mobile_basename)[0]
-#	print(mobile_basename)
-#	print(mobile_name)
-
-	try:
-		mobile_st = gemmi.read_structure(mobile_file)
-		mobile_model = mobile_st[0]
-		mobile_polymer = None
-		for chain in mobile_model:
-			poly = chain.get_polymer()
-			if poly:
-				mobile_polymer = poly
-				break
-
-		if not mobile_polymer:
-			print(f"{mobile_basename:<50} No polymer found", file=sys.stderr)
-			continue
-
-		# Main Calculation of mobile polymer superposition relative to reference polymer
-		# ptype = gemmi.PolymerType.PeptideL
-		sup = gemmi.calculate_superposition(
-			ref_polymer,
-			mobile_polymer,
-			gemmi.PolymerType.PeptideL,
-			gemmi.SupSelect.CaP
-		)
-	
-		# The alignment step where it applies the changes to mobile polymer
-		for chain in mobile_model:
-			for residue in chain:
-				for atom in residue:
-					atom.pos = gemmi.Position(sup.transform.apply(atom.pos))
-	
-		print(f"{mobile_basename:<50} {sup.rmsd:.3f}")
-#		print(f"Aligned {sup.count} matching CA atoms")
-			
-	
-		# Writes out the new aligned .cif
-		output_file = os.path.join(output_dir, "aligned_cifs", f"{mobile_name}_aligned.cif")
-		mobile_st.make_mmcif_document().write_file(output_file)
-	
-	
-	except Exception as e:
-		print(f"{mobile_basename:<50} Error: {e}", file=sys.stderr)
-		continue
-
-print(f"\n✓ Alignment complete")
-
-
-EOF
-
-if [[ $? -ne 0 ]]; then
-	echo "Error: Alignment failed :(" >&2
-	exit 1
+# Check if align_extract_ligands.py exists
+ALIGN_SCRIPT="$SCRIPT_DIR/align_extract_ligands.py"
+if [[ ! -f "$ALIGN_SCRIPT" ]]; then
+    echo "Error: $ALIGN_SCRIPT not found" >&2
+    echo "Please ensure align_extract_ligands.py is in the same directory as this script" >&2
+    exit 1
 fi
 
+# Build commands with optional flags
+ALIGN_CMD="python3 $ALIGN_SCRIPT -i $INPUT_DIR -o $OUTPUT_DIR"
+"${ALIGN_CMD[@]}"
 
+if [[ "$SAVE_ALIGNED" == true ]]; then
+    ALIGN_CMD="$ALIGN_CMD --save-aligned"
+fi
 
-##################################################
-## Step 2:  Extract Ligand Centroids of Aligned .cifs
-##################################################
+if [[ "$VERBOSE" == true ]]; then
+    ALIGN_CMD="$ALIGN_CMD -v"
+fi
 
-echo ""
-echo "Step 2: Extracting ligand centers of mass from aligned structures"
-echo ""
+# Run alignment and extraction
+$ALIGN_CMD
 
+if [[ $? -ne 0 ]]; then
+    echo "Error: Alignment and extraction failed" >&2
+    exit 1
+fi
+
+# Verify output file exists
 CENTROID_FILE="$OUTPUT_DIR/ligand_centers.csv"
-echo "Structure,X,Y,Z,N_atoms" > "$CENTROID_FILE"
-
-printf "%-50s %35s %10s\n" "Structure" "Ligand Centroid (x, y, z)" "# Atoms"
-echo "--------------------------------------------------------------------------------"
-
-for CIF in "$OUTPUT_DIR/aligned_cifs"/*.cif; do
-	BASENAME=$(basename "$CIF")
-
-	# Extract HETATM lines for LIG1 ligand and get coordinates
-	# Only works if col 11, 12, and 13 of .cif are the x, y, z
-	COORDS=$(awk '
-        /^ATOM/ || /^HETATM/ {
-            # Check if this line contains LIG1
-                if ($0 ~ /LIG1/) {
-	                    # CIF format: fields are space-separated
-	                    # Print columns 11 (x), 12 (y), 13 (z)
-	                print $11, $12, $13
-                }
-        }
-	' "$CIF")
-    
-	if [[ -z "$COORDS" ]]; then
-	    echo "$BASENAME: No LIG1 ligand found" >&2
-	     continue
-	fi
-	    
-	# Calculate centroid using bc
-	N_ATOMS=$(echo "$COORDS" | wc -l)
-	SUM_X=0
-	SUM_Y=0
-	SUM_Z=0
-	
-	while read -r X Y Z; do
-		SUM_X=$(echo "$SUM_X + $X" | bc)
-		SUM_Y=$(echo "$SUM_Y + $Y" | bc)
-		SUM_Z=$(echo "$SUM_Z + $Z" | bc)
-	done <<< "$COORDS"
-	
-	CENT_X=$(echo "scale=3; $SUM_X / $N_ATOMS" | bc)
-	CENT_Y=$(echo "scale=3; $SUM_Y / $N_ATOMS" | bc)
-	CENT_Z=$(echo "scale=3; $SUM_Z / $N_ATOMS" | bc)
-	
-	# Save to file
-	echo "$BASENAME,$CENT_X,$CENT_Y,$CENT_Z,$N_ATOMS" >> "$CENTROID_FILE"
-	
-	printf "%-50s (%8.3f, %8.3f, %8.3f) %10s\n" "$BASENAME" "$CENT_X" "$CENT_Y" "$CENT_Z" "$N_ATOMS"
-done
+if [[ ! -f "$CENTROID_FILE" ]]; then
+    echo "Error: ligand_centers.csv not created"
+    exit 1
+fi
 
 echo ""
-echo "✓ Ligand centers extracted and saved to ligand_centers.csv"
-
 
 
 ################################################################################
@@ -541,7 +399,9 @@ echo "========================================"
 echo "Analysis Complete!"
 echo "========================================"
 echo "Output files:"
-echo "  aligned_cifs/           Aligned structures"
+if [[ "$SAVE_ALIGNED" == true ]]; then
+    echo "  aligned_cifs/           Aligned structures"
+fi
 echo "  ligand_centers.csv      Ligand centroids"
 echo "  ligand_deviations.csv   Distances from average"
 if [[ -f "$OUTPUT_DIR/pocket_assignments.csv" ]]; then
