@@ -86,7 +86,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --save-aligned)
-            SAVE_ALIGNED=false
+            SAVE_ALIGNED=true
             shift
             ;;
         --dry-run)
