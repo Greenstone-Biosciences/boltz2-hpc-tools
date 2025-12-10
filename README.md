@@ -51,16 +51,28 @@ Setup complete!
 ```
 
 
-## Use
+## UPDATES
+UPDATE 12_03_2025
+####################
+We have modified Nutz.sh and the prep_batch_boltz to process smiles in the boltz-2 batch mode (which is to say on a directory containing yaml files).
+As such, the program will now first generate all the ligand yaml files in the output directory. This process takes some time (about 1 hr for 10,000 ligands).  During this period the GPU will NOT be used. Once all ligand yamls are generated, then boltz predict will begin. Overall this method appears to be roughly 5x faster than the previous per-ligand method. 
+
+An additional optional arguments is now avaiable: 
+-b batch number which is the SLURM ARRAY_TASK_THROTTLE (i.e. the number of jobs that can run simultaneously). 
+
+More updates will, and please let me know if there are any features you would like have.
+####################
+
+## USE
 These programs collecivetly and affectionately called "Nutz and Boltz" consist of a couple of wrapper scripts to run Boltz-2 using SLURM array jobs.
 For each program you may do -h flag to see a detailed usage. 
 
 The general workflow is:
-1) Fetch protein fasta using uniprot ID & split smiles file into n chunks for each slurm array job to process.
+1) Fetch protein fasta using uniprot ID (or provide a fasta file containing the sequence you are interested in) & split smiles file into n chunks for each slurm array job to process.
 ```
-./prep_batch_boltz -p <uniprot_ID> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>]
+./prep_batch_boltz -p <uniprot_ID> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>] [-b <slurm_array_task_throttle>]
 ```
-The file containing SMILES strings may be comma or space separated, but the SMILES strings MUST be in the first column, followed by an Identifier in the second column.  Other columns are ignored. Optional flags: If there is a header in the SMILES file, include the flag --rm_header to ignore it. If you already have a msa file generated include the full path to that file after the -m flag. To run as only a single job, -j = 1 or omit the flag entirely. 
+The file containing SMILES strings may be comma or space separated, but the SMILES strings MUST be in the first column, followed by an Identifier in the second column. All other columns are ignored. Optional flags: If there is a header in the SMILES file, include the flag --rm_header to ignore it. If you already have a msa file generated include the full path to that file after the -m flag. To run as only a single job, -j = 1 or omit the flag entirely. -b is only compatable if -j is greater than 1
 
 The output will be a .slurm submission file. This file should be modified as needed for your use case (i.e. add #SBATCH time=??? or select specific GPU/partitions to use if required by your system). Simply run using sbatch (the command itself will be echoed to the terminal).
 

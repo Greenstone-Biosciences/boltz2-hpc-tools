@@ -4,81 +4,92 @@
 #Written by Jeremy Leitz @ Greenstone Biosciences
 #https://https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
 #Update 11_26_2025: JL added option to use sequence file instead of uniprot ID.
+#Update 12_03_2025: JL modified Nutz.sh to run in Boltz-2-supported batch mode. Here now added option to throttle number of array tasks
 
 set -e #Exit on error
 
 #Usage
 show_usage() {
-	echo "usage: $0 -p <uniprot_ID/file_containing_squence> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>]"
-	exit ${1:-0}
+	cat << EOF
+Usage: $0 -p <uniprot_ID/file_containing_squence> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>] [-b <batch number>]
+
+Prerequisite Conda env:
+	Requires BOLTZ_CONDA_ENV
+
+Required arguments:
+	-p ReceptorID/Sequence	Provide either the uniprotID of the protein you are interested in OR provide a file containig a sequence.
+	-s SMILES		File containing smiles strings that you're interested in. File header is optional, see below.
+	-n Run_Name		Name of the SLURM job [Default is UniprotID or name of file provided]
+	-j Job_Number		The SMILES file will be split into this this many chunks [Default is 1]. Note  
+	-o Output_DIR		Output directory [default: Current working directory]
+	
+Optional arguments:
+	--rm_header		Remove SMILES file header. Include this variavble if you have a header in the SMILES file
+	-m MSA_FILE_PATH	Full path to the MSA file you would like to use or have precomputed. This speeds up Boltz predict.
+	-b Batch_Number		Number of jobs to run simultaneously. Essentially setting SLURM_ARRAY_TASK at submission.
+
+Examples:
+	For predicting on Tryosine-protein Kinase ABL1 (uniprot ID: P00519) using a precomputed MSA file and SMILES file of 100 molecules split into 10 molecules per node, running 4 jobs at a time:
+	$0 -p P00519 -s /Coolest_User/Important_Project/molecules.smi -n Boltz2_Run42 -j 10 -o /Coolest_User/Important_project/Output/ --rm_header -m /Coolest_User/Important_Project/ABL1_boltz/ABL1_uniref.a3m -b 4
+
+	For predicting on a user-defined sequence, allowing boltz to use MSA server on a SMILES file of 100 molecules without splitting on a single node:
+	$0 -p /Coolest_User/Important_Project/protein_sequence.fasta -s /Coolest_User/Important_Project/molecules.smi -n Boltz2_Run42 -o /Coolest_User/Important_Project/Output/ --rm_header 
+
+Additional notes:
+	There is currently no memory allocation component to the SLURM file. Users may need to add this constraint depending on their system and their administration. If Users recieve an OOM error. In this case, we suggest increasing Job_Number as this will create more, smaller, chunks to process. 
+
+Good Luck!!!
+
+EOF
+	exit 1
 }
 
-#Default values
-output="${PWD}/"
-job_num=1
-name="${Prot_ID}" #Default job name will be Uniprot_ID
-
 #Parse arguments
-while [[ $# -gt 0 ]]; do
-	key="$1"
-	case $key in
-		-p|--UniProtID)
-			Prot_ID="$2"
-			shift
-			shift
-			;;
-		-j|--Job_num)
-			job_num="$2"
-			shift
-			shift
-			;;
-		-s|--smiles)
-			smiles_og="$2"
-			shift
-			shift
-			;;
-		-o|--output)
-			Output="$2"
-			shift
-			shift
-			;;
-		-n|--name)
-			Run_name="$2"
-			shift
-			shift
-			;;
-		-m|--use_msa)
-			Use_MSA="$2"
-			shift
-			shift
-			;;
-		--rm_header)
-			rm_header_flag=true
-			shift
-			;;
-		-h|--help)
-			show_usage
-			;;
-		*)
-			echo "Unknown option $1"
-			show_usage 1
-			;;
-	esac
+if ! PARSED=$(getopt -o p:j:s:o:n:m:b:h --long UniProtID:,Job_num:,smiles:,output:,name:,use_msa:,batch_num:,rm_header,help -n "$0" -- "$@"); then
+show_usage
+fi
+eval set -- "$PARSED"
+
+while true; do
+        case $1 in
+                -p|--UniProtID) Prot_ID="$2"; shift 2 ;;
+                -j|--Job_num)   job_num="$2"; shift 2 ;;
+                -s|--smiles)    smiles_og="$2"; shift 2 ;;
+                -o|--output)    Output="$2"; shift 2 ;;
+                -n|--name)      Run_name="$2"; shift 2 ;;
+                -m|--use_msa)   Use_MSA="$2"; shift 2 ;;
+                --rm_header)    rm_header_flag=true; shift ;;
+		-b|--batch_num) batch_num="$2"; shift 2 ;;
+                -h|--help)      show_usage; exit 0 ;;
+                --) shift; break ;;
+                *) echo "Unknown option $1"; show_usage 1; exit 1 ;;
+        esac
 done
 
+#Defaults
+[[ -z "$Output" ]] && Output="${PWD}/"
+[[ -z "$job_num" ]] && job_num=1
+[[ -z "$Run_name" ]] && Run_name="$(basename ${Prot_ID})" #Default job name will be Uniprot_ID
 
 #Make output and move to it
+echo "Output directory is: $Output"
 mkdir -p "$Output"
+smifi=$(basename $smiles_og)
 #Copy file to output if it isn't already there
-if [[ ! -f $Output/$smiles_og ]]; then
+if [[ ! -f $Output/$smifi ]]; then
 	cp $smiles_og $Output
 fi
 
 #Move to the Output Directory
 cd $Output
+#Copy file to output if it isn't already there 
+if [[ ! -f ./$smifi ]]; then
+	echo "still can't find smiles file"
+	cp $smiles_og ./
+fi
+
 smiles="$Output/$(basename "$smiles_og")"
 mkdir -p $Output/Nutz
-mkdir -p $Output/Nutz/Ligand_yamls
 echo "Dowloading sequence for ${Prot_ID} to $Output"
 
 #Fetch the fasta sequence and save
@@ -90,9 +101,10 @@ if [ -f ${Prot_ID} ]; then
 	Prot_file_to_use="${PWD}/Nutz/$Prot_file"
 else
 	echo "Fetching fasta sequence from Uniprot"
-	curl-s "https://rest.uniprot.org/uniprotkb/${Prot_ID}.fasta" | tail -n +2 | tr -d '\n' > ${Output}/Nutz/${Prot_ID}.fasta
+	curl -s "https://rest.uniprot.org/uniprotkb/${Prot_ID}.fasta" | tail -n +2 | tr -d '\n' > ${Output}/Nutz/${Prot_ID}.fasta
 	Prot_file_to_use="${PWD}/Nutz/${Prot_ID}.fasta"
 	echo "Sequence saved"
+fi
 
 #Split smiles into j Jobs
 if [ -f $smiles ]; then
@@ -140,7 +152,7 @@ if [[ $job_num -gt 1 ]]; then
 	echo "
 	run job as:
 	
-	sbatch --array=0-${array_len} ${PWD}/Nutz/${Run_name}_${stamp}.slurm
+	sbatch --array=0-${array_len}%${batch_num:+$batch_num} ${PWD}/Nutz/${Run_name}_${stamp}.slurm
 	
 	Good luck!!"
 else
