@@ -52,6 +52,10 @@ Setup complete!
 
 
 ## UPDATES
+UPDATE 12_13_2025
+We have now also added prep_analysis. Which will generate an analysis script that goes through the boltz outputs and puts them into a combined csv. 
+More updates will follow including options to parallelize across nodes.
+
 UPDATE 12_03_2025
 ####################
 We have modified Nutz.sh and the prep_batch_boltz to process smiles in the boltz-2 batch mode (which is to say on a directory containing yaml files).
@@ -80,11 +84,19 @@ The output will be a .slurm submission file. This file should be modified as nee
 
 Each SMILE string will generate a boltz_results_IDENTIFYIER folder within the Ligand_Yamls directory in Nutz. 
 
-3) Analyze the entire Ligand_yamls directory and concatinate output into a file combine.csv in the output directory. Optionally overwrite an existing combine.csv file in the same directory using the -w flag.
+3) Run prep_analyze with the input directory and other flags, (see below).  This will output a slurm file and print a line to submit that slurm job.
+```
+Usage: ./prep_analyze -i <Input Directory > -o [ Output Directory ] -J [Job name] -n [job_number] -p [number of parallel processes] -P [parition] -c [number of cpus to use per node ] -m [ slurm memory to allocate ] -w [ Overwrite results ]
+```
+Please note tha tthe number of parallel processes refers to the job number input into GNU parallel (-j). -c is the cpu number. The value of parallel processes MUST BE LESS THAN or equal to the cpu number. We have done this to be conservative. If you give a larger number, it will revert to the number of cpus assigned to the slurm job. If you want this changed, send us an email. 
+
+
+4) Analyze the entire Ligand_yamls directory and concatinate output into a file combine.csv in the output directory. Optionally overwrite an existing combine.csv file in the same directory using the -w flag.
 
 ```
 ./analyze_batch_boltz -i <Input Directory that contains 'Ligand_yamls' directory> -o <Output Directory> [-w/--overwrite]
 ```
+
 
 Please feel free to contact us (me) with suggestions or changes. 
 
