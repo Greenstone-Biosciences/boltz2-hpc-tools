@@ -71,7 +71,7 @@ else
 		fi
 		
 		#Process the files
-		find $InputDIR/Ligand_yamls/ -name "affinity*.json" | while read -r file; 
+		find $InputDIR/Nut_* -name "affinity*.json" | while read -r file; 
 		do 
 			# Validate JSON before processing
 			if ! jq empty "$file" 2>/dev/null; then
