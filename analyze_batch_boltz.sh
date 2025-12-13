@@ -1,0 +1,124 @@
+#!/bin/bash
+#Script: Analyze_boltz_batch
+#Purpose: extracts boltz output affinity .json files into .csv format and combines for all files in a folder
+#Author: Jeremy Leitz @ Greenstone Biosciences
+#https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
+#Date: 2025-12-12
+
+
+#Usage ./Analyze_boltz_batch -i <input directory> -o <output directory> [-w]
+#
+#Description:
+#Searches for *affinity.json files in the Output directory and concatenates them and combines them into a csv file.
+#
+#Dependencies: Requires jq installed
+
+#Default parameter
+parallel_num=${SLURM_CPUS_PER_TASK:-1}
+
+#Parse arguments
+while [[ $# -gt 0 ]]; do
+	key="$1"
+	case $key in
+		-i|--Input) 
+			InputDIR="$2"  #Should be the Nutz folder that contains "Ligand_yamls" folder
+			shift
+			shift
+			;;
+		-o|--Output)
+			OutputDIR="$2"
+			shift
+			shift
+			;;
+		-p|--parallel_num)
+			parallel_num="$2"
+			shift
+			shift
+			;;
+		-w|--overwrite)
+			overwrite=true
+			shift
+			;;
+		 *)
+			echo "usage: $0 -i <Input Directory that contains 'Ligand_yamls' directory> -o <Output Directory> [-w/--overwrite] [-p parallel job number]"
+			exit 1
+		esac
+done
+
+# Source the conda setup to make the `conda` command available.
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate BOLTZ_CONDA_ENV
+
+#Check folders
+if [[ -z "$InputDIR" ]] || [[ -z "$OutputDIR" ]]; then
+	echo "Error: Both -i and -o are required"
+	echo "usage: $0 -i <Input Directory that contains 'Ligand_yamls' directory> -o <Output Directory> [-w/--overwrite] [-p paralellize by slurm array task num]"
+	exit 1
+fi
+
+
+# Source the conda setup to make the `conda` command available.
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate BOLTZ_CONDA_ENV
+
+#Processing function
+process_affinity(){
+	local file=$1
+
+	if ! jq empty "$file" 2>/dev/null; then 
+		echo "Warning: Skipping JSON: $file" >&2
+		return
+	fi
+
+	basename_file=$(basename "$file")
+	target=$(echo "$basename_file" | cut -d '_' -f2)
+	compound=$(echo "$basename_file" | cut -d '_' -f3)
+
+	jq -r --arg filename "$basename_file" \
+		--arg Receptor "$target" \
+		--arg Drug "$compound" \
+		'[$filename, $Receptor, $Drug] + [.[]] | @csv' "$file"
+}
+
+export -f process_affinity
+
+#Create output directory, if needed.
+if [[ ! -d "$OutputDIR" ]]; then mkdir -p $OutputDIR; fi
+
+#Check that the input directory exists
+if ! ls "$InputDIR"/Nut_* &>/dev/null; then
+        echo "Error: INput Directory ($InputDIR) does not contain any Nut_* folders"
+        exit 1
+else
+	fileNUM=$(find $InputDIR/Nut_* -name "affinity*.json" | wc -l)
+	if [ $fileNUM -eq 0 ]; then 
+		echo "Found the directory ${InputDIR}/Nut_*, but it appears to be empty!"
+		exit 1
+	else
+		echo "Found ${fileNUM} files!  Processing now..."
+		first_file=$(find $InputDIR/Nut_* -name "affinity*.json" | head -n 1)		
+
+		#Check if output file exists, if not create it/overwrite it, or exit
+		if [[ ! -f "$OutputDIR"/combined.csv ]]; then
+       			 jq -r '["filename", "Receptor", "Drug"] + keys_unsorted | @csv' $first_file > $OutputDIR/combined.csv
+		else
+        		if [[ $overwrite == "true" ]]; then
+                		echo "Found existing combined.csv file, overwriting it...."
+                		jq -r '["filename", "Receptor", "Drug"] + keys_unsorted | @csv' $first_file > $OutputDIR/combined.csv
+        		else
+                		echo "File $OutputDIR/combined.csv already exists. Use -w or --overwrite flag to overwrite it."
+                		exit 1
+       			fi
+		fi
+		
+		#Process the files
+		find $InputDIR/Nut_* -name "affinity*.json" | \
+			parallel -j $parallel_num \
+				--progress \
+				--joblog $OutputDIR/process.log \
+				--resume \
+				process_affinity {} >> "$OutputDIR"/combined.csv
+	fi
+fi
+
+echo "All done analyzing, boss!"

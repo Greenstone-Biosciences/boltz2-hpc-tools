@@ -1,0 +1,109 @@
+#!/bin/bash
+#Script: prep_analyze
+#Written by: Jeremy Leitz @ Greenstone Biosciences
+#Purpose: This script prepares a bash script to run the boltz analysis in parallel. 
+
+#Usage
+show_usage() {
+	cat << EOF
+Usage $0 -i <Input Directory > -o [ Output Directory ] -J [Job name] -n [job_number] -p [number of parallel processes] -P [parition] -c [number of cpus to use per node ] -m [ slurm memory to allocate ] -w [ Overwrite results ]
+EOF
+exit 1
+}
+
+#Default values
+job_num=1
+parallel_proc=1
+OutputDIR="${PWD}/"
+cpu_num=1
+Partition="defq"
+JobName="AnalyzeBoltz"
+
+#Parsing data
+if ! PARSED=$(getopt -o i:o:J:n:p:P:c:m:wIh --long InputDIR:,OutputDIR:,JobName:,job_num:,parallel_proc:,Partition:,cpu_num:,Mem:,Interactive,Overwrite,help -n "$0" -- "$@"); then
+	show_usage
+fi
+
+eval set -- "$PARSED"
+
+while true; do
+	case $1 in 
+		-i|--input)		InputDIR="$2"; shift 2 ;;
+		-o|--output)		OutputDIR="$2"; shift 2 ;;
+		-J|--JobName)		JobName="$2"; shift 2 ;;
+		-n|--job_num)	 	job_num="$2"; shift 2 ;;
+		-p|--parallel_proc)	parallel_proc="$2"; shift 2 ;;
+		-P|--Partition)		Partition="$2"; shift 2 ;;
+		-c|--cpu_num)		cpu_num="$2"; shift 2 ;;
+		-m|--Memory) 		Mem="$2"; shift 2 ;;
+		-I|--Interactive)	Interactive=true; shift ;;
+		-w|--Overwrite)		overwrite=true; shift ;;
+		-h|--help) 		show_usage; exit 0 ;;
+		--) shift; break ;;
+		*) echo "Unknown option $1"; show_usage 1; exit 1;;
+	esac
+done
+
+#Check input files
+if ! ls "$InputDIR"/Nut_* &>/dev/null; then
+	echo "Error: INput Directory ($InputDIR) does not contain any Nut_* folders"
+	exit 1
+fi
+#Validate parallel_proc vs cpu_num
+if [[ "$parallel_proc" -gt "$cpu_num" ]]; then
+	echo "Parallel processing number (${parallel_proc}) has been set higher than the ${cpu_num}.  This might causes problems. -p should be less than or equal to the total cpu requested number (${cpu_num})."
+	echo "Setting parallel_proc=${cpu_num}"
+	parallel_proc=$cpu_num
+fi
+
+#Make output directory
+mkdir -p "$OutputDIR"
+
+#=================
+#If multiple array
+#=================
+
+#if [[ $job_num -gt 1 ]]; then
+
+#fi
+
+
+
+#===========================
+      #Make SLURM file
+#===========================
+#Make time stamp
+stamp=$(date +"%Y_%m_%d_%H%M")
+
+#Start Slurm file
+slurm_file="$InputDIR/${JobName}_${stamp}.slurm"
+
+echo "#!/bin/bash" > $slurm_file
+if [[ $job_num -gt 1 ]]; then
+	array_len=$(($job_num - 1))
+	echo "#SBATCH --array=0-${array_len}" >> $slurm_file
+fi
+
+if [[ ! -z $Mem ]]; then
+	echo "#SBATCH --memory=${Mem}" >> $slurm_file
+fi
+
+echo "
+#SBATCH --ntasks=1
+#SBATCH --job-name=boltz_analyze
+#SBATCH --cpus-per-task=${cpu_num}
+#SBATCH --partition=${Partition}
+#SBATCH --error=${OutputDIR}/analyze_boltz_%A_%a.err
+#SBATCH --output=${OutputDIR}/analyze_boltz_%A_%a.out
+
+NUTZ_PATH/analyze_batch_boltz.sh -i $InputDIR -o $OutputDIR -p ${parallel_proc}${overwrite:+ -w}" >> $slurm_file
+
+#=================
+#Issue Run command
+#=================
+
+echo "Run job as:
+
+sbatch $slurm_file
+
+Good luck!!!"
