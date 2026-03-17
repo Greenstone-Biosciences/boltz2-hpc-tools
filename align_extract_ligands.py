@@ -64,7 +64,7 @@ def find_cif_files(input_dir, verbose=False):
             print("  Detected Boltz2 structure, using predictions pattern")
         cif_files = []
         for lyd in ligand_yamls_dirs:
-            cif_files.extend(lyd.glob("*/predictions/*/*.cif"))
+            cif_files.extend(lyd.parent.glob("**/predictions/*/*.cif"))
         cif_files = sorted([str(f) for f in cif_files])
     else:
         # Flat structure: find any CIF files

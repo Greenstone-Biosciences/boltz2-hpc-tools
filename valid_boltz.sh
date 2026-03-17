@@ -253,7 +253,6 @@ fi
 
 # Build commands with optional flags
 ALIGN_CMD="python3 $ALIGN_SCRIPT -i $INPUT_DIR -o $OUTPUT_DIR"
-"${ALIGN_CMD[@]}"
 
 if [[ "$SAVE_ALIGNED" == true ]]; then
     ALIGN_CMD="$ALIGN_CMD --save-aligned"
