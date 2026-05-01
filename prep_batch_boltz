@@ -1,166 +1,466 @@
 #!/bin/bash
-#Boltz-2 slurm preparation script. 
-#This script takes as input the uniprot ID, smiles file, and a job (chunk) number.  The UniprotID will be used to fetch the .fasta from Uniprot and the smiles file will be split into <job number> chunks for processing. Then an sbach file will be produced that will run all the chunks (via Nutz.sh) as an array job.
-#Written by Jeremy Leitz @ Greenstone Biosciences
-#https://https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
-#Update 11_26_2025: JL added option to use sequence file instead of uniprot ID.
-#Update 12_03_2025: JL modified Nutz.sh to run in Boltz-2-supported batch mode. Here now added option to throttle number of array tasks
+# Boltz-2 SLURM preparation script.
+# Fetches protein FASTA(s), splits a SMILES file into chunks, and generates
+# a ready-to-submit SLURM array script.
+#
+# MSA handling (evaluated per chain independently):
+#   MSA provided for a chain  : path baked directly into the SLURM script.
+#   MSA missing for a chain   : a single pilot job is submitted via 'sbatch --wait',
+#                               generating MSAs for ALL missing chains in one boltz run.
+#                               Deez.sh blocks until it finishes, then bakes the
+#                               located paths into the final SLURM script.
+#
+# Written by Jeremy Leitz @ Greenstone Biosciences
+# https://github.com/Greenstone-Biosciences/boltz2-hpc-tools
+# Formerly Deez.sh
 
-set -e #Exit on error
+set -e
 
-#Usage
+NUTZ_PATH="NUTZ_PATH"   # replaced by setup.sh
+
 show_usage() {
-	cat << EOF
-Usage: $0 -p <uniprot_ID/file_containing_squence> -s <file_containing_smiles> [-n <Run_name>] [-j <Slurm_array_job_number>] [-o <path_to_output_directory>] [--rm_header] [-m <msa_file_path>] [-b <batch number>]
+    cat << EOF
+Usage: prep_batch_boltz -p <uniprot_ID_or_fasta> -s <smiles_file> [options]
 
-Prerequisite Conda env:
-	Requires BOLTZ_CONDA_ENV
+Required:
+    -p   UniProt ID or path to FASTA file (chain 1)
+    -s   SMILES file. Accepted formats:
+           .csv  : must have a header row. SMILES column is auto-detected from
+                   common names (smiles, smi, canonical_smiles, structure) or
+                   specified with -c.
+           other : treated as whitespace/tab-delimited .smi format with
+                   SMILES in column 1 and name in column 2. Use -c to specify
+                   a different column number (1-based) if needed.
 
-Required arguments:
-	-p ReceptorID/Sequence	Provide either the uniprotID of the protein you are interested in OR provide a file containig a sequence.
-	-s SMILES		File containing smiles strings that you're interested in. File header is optional, see below.
-	-n Run_Name		Name of the SLURM job [Default is UniprotID or name of file provided]
-	-j Job_Number		The SMILES file will be split into this this many chunks [Default is 1]. Note  
-	-o Output_DIR		Output directory [default: Current working directory]
-	
-Optional arguments:
-	--rm_header		Remove SMILES file header. Include this variavble if you have a header in the SMILES file
-	-m MSA_FILE_PATH	Full path to the MSA file you would like to use or have precomputed. This speeds up Boltz predict.
-	-b Batch_Number		Number of jobs to run simultaneously. Essentially setting SLURM_ARRAY_TASK at submission.
+Optional:
+    --UniProtID2   UniProt ID or FASTA path for a second protein chain
+    -n             Run/job name [default: UniProt ID or FASTA basename]
+    -j             Number of SLURM array chunks [default: 1]
+    -o             Output directory [default: current working directory]
+    -m             Pre-computed MSA for chain 1. If omitted, pilot job generates it.
+    --use_msa2     Pre-computed MSA for chain 2. If omitted and chain 2 exists,
+                   pilot job generates it alongside any other missing MSAs.
+    -b             Max simultaneous array tasks (throttle)
+    -c             For .csv: SMILES column name (e.g. -c Structure).
+                   For other formats: SMILES column number, 1-based (e.g. -c 3).
+                   Defaults: .csv auto-detects; other formats use column 1.
 
 Examples:
-	For predicting on Tryosine-protein Kinase ABL1 (uniprot ID: P00519) using a precomputed MSA file and SMILES file of 100 molecules split into 10 molecules per node, running 4 jobs at a time:
-	$0 -p P00519 -s /Coolest_User/Important_Project/molecules.smi -n Boltz2_Run42 -j 10 -o /Coolest_User/Important_project/Output/ --rm_header -m /Coolest_User/Important_Project/ABL1_boltz/ABL1_uniref.a3m -b 4
+    # CSV file, auto-detected SMILES column:
+    prep_batch_boltz -p P00519 -s molecules.csv -n ABL1_screen -j 10 -o /data/output
 
-	For predicting on a user-defined sequence, allowing boltz to use MSA server on a SMILES file of 100 molecules without splitting on a single node:
-	$0 -p /Coolest_User/Important_Project/protein_sequence.fasta -s /Coolest_User/Important_Project/molecules.smi -n Boltz2_Run42 -o /Coolest_User/Important_Project/Output/ --rm_header 
+    # CSV with non-standard SMILES column name:
+    prep_batch_boltz -p P00519 -s molecules.csv -n ABL1_screen -j 10 -o /data/output -c Structure
 
-Additional notes:
-	There is currently no memory allocation component to the SLURM file. Users may need to add this constraint depending on their system and their administration. If Users recieve an OOM error. In this case, we suggest increasing Job_Number as this will create more, smaller, chunks to process. 
+    # .smi file, SMILES in column 1 (default):
+    prep_batch_boltz -p P00519 -s molecules.smi -n ABL1_screen -j 10 -o /data/output
 
-Good Luck!!!
+    # .smi file, SMILES in column 3:
+    prep_batch_boltz -p P00519 -s molecules.smi -n ABL1_screen -j 10 -o /data/output -c 3
+
+    # Two-chain complex, no pre-computed MSAs:
+    prep_batch_boltz -p P00519 --UniProtID2 Q9Y6K9 -s molecules.csv -j 10 -o /data/output
 
 EOF
-	exit 1
+    exit 1
 }
 
-#Parse arguments
-if ! PARSED=$(getopt -o p:j:s:o:n:m:b:h --long UniProtID:,Job_num:,smiles:,output:,name:,use_msa:,batch_num:,rm_header,help -n "$0" -- "$@"); then
-show_usage
-fi
+# ---------- Argument parsing ----------
+
+PARSED=$(getopt -o p:j:s:o:n:m:b:c:h \
+    --long UniProtID:,UniProtID2:,Job_num:,smiles:,output:,name:,use_msa:,use_msa2:,batch_num:,smiles_col:,help \
+    -n "$0" -- "$@")
+[[ $? -ne 0 ]] && show_usage
 eval set -- "$PARSED"
 
 while true; do
-        case $1 in
-                -p|--UniProtID) Prot_ID="$2"; shift 2 ;;
-                -j|--Job_num)   job_num="$2"; shift 2 ;;
-                -s|--smiles)    smiles_og="$2"; shift 2 ;;
-                -o|--output)    Output="$2"; shift 2 ;;
-                -n|--name)      Run_name="$2"; shift 2 ;;
-                -m|--use_msa)   Use_MSA="$2"; shift 2 ;;
-                --rm_header)    rm_header_flag=true; shift ;;
-		-b|--batch_num) batch_num="$2"; shift 2 ;;
-                -h|--help)      show_usage; exit 0 ;;
-                --) shift; break ;;
-                *) echo "Unknown option $1"; show_usage 1; exit 1 ;;
-        esac
+    case $1 in
+        -p|--UniProtID)  Prot_ID="$2";    shift 2 ;;
+        --UniProtID2)    Prot_ID2="$2";   shift 2 ;;
+        -j|--Job_num)    job_num="$2";    shift 2 ;;
+        -s|--smiles)     smiles_og="$2";  shift 2 ;;
+        -o|--output)     Output="$2";     shift 2 ;;
+        -n|--name)       Run_name="$2";   shift 2 ;;
+        -m|--use_msa)    Use_MSA="$2";    shift 2 ;;
+        --use_msa2)      Use_MSA2="$2";   shift 2 ;;
+        -b|--batch_num)  batch_num="$2";  shift 2 ;;
+        -c|--smiles_col) Smiles_Col="$2"; shift 2 ;;
+        -h|--help)       show_usage ;;
+        --) shift; break ;;
+        *) echo "Unknown option: $1"; show_usage ;;
+    esac
 done
 
-#Defaults
-[[ -z "$Output" ]] && Output="${PWD}/"
-[[ -z "$job_num" ]] && job_num=1
-[[ -z "$Run_name" ]] && Run_name="$(basename ${Prot_ID})" #Default job name will be Uniprot_ID
+# ---------- Validation ----------
 
-#Make output and move to it
-echo "Output directory is: $Output"
-mkdir -p "$Output"
-smifi=$(basename $smiles_og)
-#Copy file to output if it isn't already there
-if [[ ! -f $Output/$smifi ]]; then
-	cp $smiles_og $Output
-fi
+[[ -z "$Prot_ID" ]]     && { echo "ERROR: -p is required."; show_usage; }
+[[ -z "$smiles_og" ]]   && { echo "ERROR: -s is required."; show_usage; }
+[[ ! -f "$smiles_og" ]] && { echo "ERROR: SMILES file not found: $smiles_og"; exit 1; }
+[[ -n "$Use_MSA"  && ! -f "$Use_MSA"  ]] && { echo "ERROR: MSA file not found: $Use_MSA";  exit 1; }
+[[ -n "$Use_MSA2" && ! -f "$Use_MSA2" ]] && { echo "ERROR: MSA file not found: $Use_MSA2"; exit 1; }
 
-#Move to the Output Directory
-cd $Output
-#Copy file to output if it isn't already there 
-if [[ ! -f ./$smifi ]]; then
-	echo "still can't find smiles file"
-	cp $smiles_og ./
-fi
+# ---------- Defaults ----------
 
-smiles="$Output/$(basename "$smiles_og")"
-mkdir -p $Output/Nutz
-echo "Dowloading sequence for ${Prot_ID} to $Output"
+[[ -z "$job_num"  ]] && job_num=1
+[[ -z "$Output"   ]] && Output="${PWD}"
+[[ -z "$Run_name" ]] && Run_name="$(basename "${Prot_ID}" .fasta)"
 
-#Fetch the fasta sequence and save
-if [ -f ${Prot_ID} ]; then
-	echo "User has supplied a sequence file"
-	#copy file to output folder
-	Prot_file=$(basename $Prot_ID)
-	scp "$Prot_ID" "${Output}/Nutz/$Prot_file"
-	Prot_file_to_use="${PWD}/Nutz/$Prot_file"
-else
-	echo "Fetching fasta sequence from Uniprot"
-	curl -s "https://rest.uniprot.org/uniprotkb/${Prot_ID}.fasta" | tail -n +2 | tr -d '\n' > ${Output}/Nutz/${Prot_ID}.fasta
-	Prot_file_to_use="${PWD}/Nutz/${Prot_ID}.fasta"
-	echo "Sequence saved"
-fi
-
-#Split smiles into j Jobs
-if [ -f $smiles ]; then
-	echo "Found smiles file, splitting in to ${job_num} chunks. Placing chunks in to $Output/Nutz folder."
-	if [[ "$rm_header_flag" = "true" ]]; then
-		echo "User has indicated that the smiles file has a header, it is being removed.  Original smiles now moved to ${smiles}_OG"
-		cp "${smiles}" "${smiles}_OG"
-		sed -i '1d' ${smiles}
-	else
-		echo "User has indicated there is no header, using the smiles file as is."
-	fi
-		split -n l/${job_num} -d --suffix-length=4 $smiles Nutz/chunk_
-else
-	echo "Couldn't find smiles file.  Looked for ${smiles}, are you sure it's there?"
-	exit 1
-fi
-
-
-#Make slurm file
+Output=$(realpath "$Output")
+mkdir -p "$Output/Nutz"
+cd "$Output"
 stamp=$(date +"%Y_%m_%d_%H%M")
-echo "#!/bin/bash" > Nutz/${Run_name}_${stamp}.slurm
-if [[ $job_num -gt 1 ]]; then
-	array_len=$(($job_num -1))
-	echo "#SBATCH --array=0-${array_len}" >> Nutz/${Run_name}_${stamp}.slurm
-else
-	echo "#SBATCH --array=0" >> Nutz/${Run_name}_${stamp}.slurm
+
+# ---------- Helper: fetch or copy FASTA ----------
+
+fetch_fasta() {
+    local id="$1"
+    local dest="$2"
+    if [[ -f "$id" ]]; then
+        echo "  Using local FASTA: $id"
+        cp "$id" "$dest"
+    else
+        echo "  Fetching from UniProt: $id"
+        curl -sf "https://rest.uniprot.org/uniprotkb/${id}.fasta" \
+            | tail -n +2 | tr -d '\n' > "$dest"
+        if [[ ! -s "$dest" ]]; then
+            echo "ERROR: Could not fetch FASTA for '$id' from UniProt."
+            exit 1
+        fi
+        echo "  Saved: $dest"
+    fi
+}
+
+# ---------- Fetch FASTA(s) ----------
+
+echo ""
+echo "=== Fetching protein sequence(s) ==="
+fetch_fasta "$Prot_ID" "${Output}/Nutz/${Prot_ID}.fasta"
+fasta_arg="${Output}/Nutz/${Prot_ID}.fasta"
+
+if [[ -n "$Prot_ID2" ]]; then
+    fetch_fasta "$Prot_ID2" "${Output}/Nutz/${Prot_ID2}.fasta"
+    fasta_arg="${fasta_arg},${Output}/Nutz/${Prot_ID2}.fasta"
 fi
 
-echo "#SBATCH --nodes=1
+# ---------- Copy and split SMILES file ----------
+
+echo ""
+echo "=== Preparing SMILES ==="
+smifi=$(basename "$smiles_og")
+# Only copy if source and destination are different files
+if [[ "$(realpath "$smiles_og")" != "$(realpath "${Output}/${smifi}")" ]]; then
+    cp "$smiles_og" "${Output}/"
+fi
+smiles="${Output}/${smifi}"
+
+# Determine file type and split accordingly
+ext="${smifi##*.}"
+ext_lower=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+
+if [[ "$ext_lower" == "csv" ]]; then
+    echo "  Detected CSV format — using pandas to split."
+    python3 - << PYEOF
+import pandas as pd, math, sys
+from pathlib import Path
+
+smiles_file = "${smiles}"
+out_dir     = Path("${Output}/Nutz")
+job_num     = ${job_num}
+user_col    = "${Smiles_Col}".strip().lower()
+
+smiles_keys = {"smiles", "smi", "canonical_smiles", "structure"}
+
+df = pd.read_csv(smiles_file)
+norm = {c.strip().lower(): c for c in df.columns}
+
+if user_col:
+    if user_col not in norm:
+        print(f"ERROR: Specified SMILES column '{user_col}' not found.")
+        print("  Columns: " + str(list(df.columns)))
+        sys.exit(1)
+    print(f"  SMILES column : '{norm[user_col]}' (user-specified)")
+else:
+    skey_norm = next((k for k in norm if k in smiles_keys), None)
+    if skey_norm is None:
+        print("ERROR: No SMILES column found in CSV header.")
+        print("  Columns: " + str(list(df.columns)))
+        print("  Tip: use -c to specify the column name explicitly.")
+        sys.exit(1)
+    print(f"  SMILES column : '{norm[skey_norm]}' (auto-detected)")
+
+chunk_size = math.ceil(len(df) / job_num)
+for i, start in enumerate(range(0, len(df), chunk_size)):
+    chunk = df.iloc[start:start + chunk_size]
+    out_path = out_dir / f"chunk_{i:04d}"
+    chunk.to_csv(out_path, index=False)
+    print(f"  chunk_{i:04d}  : {len(chunk)} rows")
+
+print(f"  Total rows    : {len(df)}")
+PYEOF
+
+else
+    # Non-CSV: whitespace/tab-delimited .smi format.
+    # SMILES expected in column 1, name in column 2 by default.
+    # User can override with -c <column_number> (1-based).
+    if [[ -n "$Smiles_Col" ]]; then
+        # Validate that the override is numeric for non-CSV files
+        if ! [[ "$Smiles_Col" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: For non-CSV files, -c must be a column number (1-based), not a name."
+            echo "       Got: -c ${Smiles_Col}"
+            exit 1
+        fi
+        echo "  Detected non-CSV format — SMILES column: ${Smiles_Col} (user-specified)"
+    else
+        echo "  Detected non-CSV format (.${ext}) — assuming SMILES in col 1, name in col 2."
+        echo "  If this is wrong, re-run with -c <column_number> to specify the SMILES column."
+    fi
+
+    # Split by lines into equal chunks, then prepend a minimal header so
+    # Nutz.sh can use csv.DictReader consistently across all file types.
+    smiles_col_idx="${Smiles_Col:-1}"
+    python3 - << PYEOF
+import math, sys
+from pathlib import Path
+
+smiles_file  = "${smiles}"
+out_dir      = Path("${Output}/Nutz")
+job_num      = ${job_num}
+smiles_col   = ${smiles_col_idx} - 1   # convert to 0-based
+
+lines = [l for l in Path(smiles_file).read_text().splitlines() if l.strip()]
+
+# Warn if the first token of the first line looks like a header word
+first_token = lines[0].split()[0].lower() if lines else ""
+if first_token in {"smiles", "smi", "name", "compound", "id", "structure"}:
+    print(f"WARNING: First line looks like a header ('{lines[0][:60]}')")
+    print("         If your file has a header, convert it to CSV format instead.")
+
+chunk_size = math.ceil(len(lines) / job_num)
+for i, start in enumerate(range(0, len(lines), chunk_size)):
+    chunk_lines = lines[start:start + chunk_size]
+    out_path = out_dir / f"chunk_{i:04d}"
+    # Write a minimal CSV-compatible header so Nutz.sh treats all chunks uniformly
+    with open(out_path, "w") as f:
+        f.write("smiles,name\n")
+        for line in chunk_lines:
+            parts = line.split()
+            if len(parts) < 1:
+                continue
+            smi  = parts[smiles_col] if smiles_col < len(parts) else ""
+            name = parts[1] if 1 < len(parts) and smiles_col != 1 else (
+                   parts[0] if smiles_col == 1 and len(parts) > 1 else f"compound_{start}")
+            # Escape any commas in SMILES (rare but possible) by quoting
+            f.write(f'"{smi}","{name}"\n')
+    print(f"  chunk_{i:04d}  : {len(chunk_lines)} rows")
+
+print(f"  Total rows    : {len(lines)}")
+PYEOF
+
+fi
+
+echo "  Done."
+array_end=$(( job_num - 1 ))
+
+# ---------- Per-chain MSA handling ----------
+
+IFS=',' read -ra fasta_arr <<< "$fasta_arg"
+n_chains=${#fasta_arr[@]}
+
+msa_arr=()
+msa_arr[0]="${Use_MSA:-}"
+[[ $n_chains -gt 1 ]] && msa_arr[1]="${Use_MSA2:-}"
+for i in $(seq ${#msa_arr[@]} $(( n_chains - 1 ))); do
+    msa_arr[$i]=""
+done
+
+echo ""
+echo "=== MSA status per chain ==="
+need_pilot=false
+for i in $(seq 0 $(( n_chains - 1 ))); do
+    label="Chain $((i+1)) ($(basename "${fasta_arr[$i]}"))"
+    if [[ -n "${msa_arr[$i]}" ]]; then
+        echo "  $label — provided: ${msa_arr[$i]}"
+    else
+        echo "  $label — missing, will generate via pilot job"
+        need_pilot=true
+    fi
+done
+
+# ---------- Pilot job ----------
+
+if [[ "$need_pilot" == true ]]; then
+    echo ""
+    echo "=== Running pilot job to generate missing MSA(s) ==="
+    echo "    Deez.sh will block until the pilot finishes."
+    echo ""
+
+    pilot_dir="${Output}/Nutz/msa_pilot"
+    mkdir -p "${pilot_dir}/Ligand_yamls"
+
+    # Seed: always taken from chunk_0000 row 2 (first data row, consistent
+    # across both CSV and non-CSV paths since both write a header to chunk_0000)
+    head -2 "${Output}/Nutz/chunk_0000" > "${pilot_dir}/msa_seed.csv"
+
+    # Write per-chain MSA slots for Python to read
+    printf '%s\n' "${msa_arr[@]}" > "${pilot_dir}/msa_slots.txt"
+
+    python3 - << PYEOF
+import csv, json, string, sys
+from pathlib import Path
+
+fasta_files = "${fasta_arg}".split(",")
+
+msa_slots_raw = Path("${pilot_dir}/msa_slots.txt").read_text().strip().split("\n")
+msa_slots = [s.strip() for s in msa_slots_raw]
+while len(msa_slots) < len(fasta_files):
+    msa_slots.append("")
+
+smiles_keys = {"smiles", "smi", "canonical_smiles", "structure"}
+name_keys   = {"name", "id", "compound_id", "molecule_name", "title",
+               "compound_name", "molecule_chembl_id"}
+user_col    = "${Smiles_Col}".strip().lower()
+
+with open("${pilot_dir}/msa_seed.csv", newline="") as f:
+    reader = csv.DictReader(f)
+    raw_fields  = reader.fieldnames or []
+    norm_fields = [h.strip().lower() for h in raw_fields]
+    field_map   = {norm: raw for norm, raw in zip(norm_fields, raw_fields)}
+
+    if user_col:
+        if user_col not in norm_fields:
+            print(f"ERROR: Specified SMILES column '{user_col}' not found in header.")
+            print("  Header: " + str(raw_fields))
+            sys.exit(1)
+        skey = field_map[user_col]
+    else:
+        skey = next((field_map[k] for k in norm_fields if k in smiles_keys), None)
+
+    nkey = next((field_map[k] for k in norm_fields if k in name_keys), None)
+
+    if skey is None:
+        print("ERROR: No SMILES column found in seed CSV header.")
+        print("  Header: " + str(raw_fields))
+        print("  Tip: use -c to specify the column name explicitly.")
+        sys.exit(1)
+
+    row   = next(reader)
+    smile = row[skey].strip()
+    name  = row.get(nkey, "seed_compound").strip() if nkey else "seed_compound"
+    name  = name.replace("/", "_").replace(" ", "_") or "seed_compound"
+
+chain_ids = list(string.ascii_uppercase)
+sequences = []
+for i, fasta in enumerate(fasta_files):
+    seq = Path(fasta.strip()).read_text().strip()
+    entry = {"id": chain_ids[i], "sequence": seq}
+    if msa_slots[i]:
+        entry["msa"] = msa_slots[i]
+    sequences.append({"protein": entry})
+
+ligand_id = chain_ids[len(fasta_files)]
+sequences.append({"ligand": {"id": ligand_id, "smiles": smile}})
+doc = {
+    "version": 1,
+    "sequences": sequences,
+    "properties": [{"affinity": {"binder": ligand_id}}]
+}
+
+out = "${pilot_dir}/Ligand_yamls/" + name + "_affinity.yaml"
+with open(out, "w") as f:
+    json.dump(doc, f, indent=2)
+print("Seed YAML written: " + out)
+PYEOF
+
+    pilot_slurm="${Output}/Nutz/pilot_${Run_name}_${stamp}.slurm"
+    cat > "$pilot_slurm" << PILOT_SLURM
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=30
+#SBATCH --job-name=pilot_${Run_name}
+#SBATCH --error=${Output}/Nutz/pilot_${Run_name}_%j.err
+#SBATCH --output=${Output}/Nutz/pilot_${Run_name}_%j.out
+#SBATCH --partition=defq-gpu
+#SBATCH --gres=gpu:1
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=single:1
+
+source "\$(conda info --base)/etc/profile.d/conda.sh"
+conda activate boltz
+
+cd ${pilot_dir}
+boltz predict ./Ligand_yamls --use_msa_server
+PILOT_SLURM
+
+    echo "  Submitting pilot job and waiting for completion..."
+    sbatch --wait "$pilot_slurm"
+    echo "  Pilot job finished."
+
+    mapfile -t a3m_files < <(find "${pilot_dir}" -name "uniref.a3m" 2>/dev/null | sort)
+    a3m_idx=0
+
+    for i in $(seq 0 $(( n_chains - 1 ))); do
+        if [[ -z "${msa_arr[$i]}" ]]; then
+            if [[ $a3m_idx -ge ${#a3m_files[@]} ]]; then
+                echo "ERROR: Expected a uniref.a3m for chain $((i+1)) but none found."
+                echo "  Found: ${a3m_files[*]:-none}"
+                echo "  Check: ${Output}/Nutz/pilot_${Run_name}_*.err"
+                exit 1
+            fi
+            msa_arr[$i]="${a3m_files[$a3m_idx]}"
+            echo "  Chain $((i+1)) MSA generated: ${msa_arr[$i]}"
+            (( a3m_idx++ )) || true
+        fi
+    done
+fi
+
+# ---------- Build final MSA argument string ----------
+
+msa_arg=$(IFS=','; echo "${msa_arr[*]}")
+echo ""
+echo "  MSA arg: $msa_arg"
+
+# ---------- Write main SLURM script ----------
+
+echo ""
+echo "=== Writing SLURM script ==="
+main_slurm="${Output}/Nutz/${Run_name}_${stamp}.slurm"
+
+cat > "$main_slurm" << MAIN_SLURM
+#!/bin/bash
+#SBATCH --array=0-${array_end}
+#SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=30
 #SBATCH --job-name=boltz_${Run_name}
-#SBATCH --error=boltz_%A_%a.err
-#SBATCH --output=boltz_%A_%a.out
+#SBATCH --error=${Output}/Nutz/boltz_${Run_name}_%A_%a.err
+#SBATCH --output=${Output}/Nutz/boltz_${Run_name}_%A_%a.out
 #SBATCH --partition=defq-gpu
 #SBATCH --gres=gpu:1
-#SBATCH --gpus-per-task=1       # number of GPUs per process
+#SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=single:1
 
+${NUTZ_PATH}/Nutz.sh \
+    -i ${Output}/Nutz \
+    -p ${fasta_arg} \
+    -m ${msa_arg}${Smiles_Col:+ -c ${Smiles_Col}}
+MAIN_SLURM
 
-NUTZ_PATH/Nutz.sh -i ${PWD}/Nutz -p $Prot_file_to_use${Use_MSA:+ -m $Use_MSA}">> Nutz/${Run_name}_${stamp}.slurm
+echo "  Written: $main_slurm"
 
-#Give final run command.
-if [[ $job_num -gt 1 ]]; then
-	echo "
-	run job as:
-	
-	sbatch --array=0-${array_len}%${batch_num:+$batch_num} ${PWD}/Nutz/${Run_name}_${stamp}.slurm
-	
-	Good luck!!"
+# ---------- Submission instructions ----------
+
+echo ""
+echo "============================================"
+echo "Setup complete. Submit your job with:"
+echo ""
+if [[ $job_num -gt 1 && -n "$batch_num" ]]; then
+    echo "  sbatch --array=0-${array_end}%${batch_num} ${main_slurm}"
+elif [[ $job_num -gt 1 ]]; then
+    echo "  sbatch --array=0-${array_end} ${main_slurm}"
 else
-	echo "
-	run job as:
-
-	sbatch ${PWD}/Nutz/${Run_name}_${stamp}.slurm
-
-	Good luck!!"
+    echo "  sbatch ${main_slurm}"
 fi
-
+echo ""
+echo "Good luck!!"
+echo "============================================"
