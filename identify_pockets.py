@@ -14,6 +14,8 @@ import sys
 import numpy as np
 import csv
 from pathlib import Path
+import json
+from datetime import datetime
 
 def parse_args():
     """Parse command line arguments of ligand centroids and coordinates."""
@@ -41,6 +43,11 @@ def parse_args():
         type=int,
         default=1,
         help="Minimum samples per cluster (default: 1)"
+    )
+    parser.add_argument(
+        "--save-anchors",
+        default=None,
+        help="Path to save pocket anchor JSON file for use in future seeded runs"
     )
     return parser.parse_args()
 
@@ -204,6 +211,63 @@ def write_cluster_stats(stats, output_dir):
             spread = stats[label]['spread']
             writer.writerow([pocket_id, size, f"{cx:.3f}", f"{cy:.3f}", f"{cz:.3f}", f"{spread:.3f}"])
 
+def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
+    """Save pocket anchor data to JSON for cross-run pocket assignment.
+    
+    Args:
+        ligand_names: List of structure names (CHEMBL IDs)
+        coords: numpy array of (x, y, z) centroids
+        labels: cluster label per compound (0-indexed)
+        stats: cluster stats dict from calculate_cluster_stats()
+        eps: DBSCAN eps value used
+        output_path: path to write pocket_anchors.json
+    """
+    pockets = {}
+    for label in sorted(stats.keys()):
+        pocket_id = label + 1
+        mask = label == labels
+        centroid = stats[label]['centroid'].tolist()
+
+        # Radius: 95th percentile distance from centroid (robust to outliers)
+        cluster_coords = coords[mask]
+        distances = np.linalg.norm(cluster_coords - stats[label]['centroid'], axis=1)
+        radius = float(np.percentile(distances, 95)) if len(distances) > 1 else float(eps)
+        # Minimum radius is eps so single-compound pockets still catch nearby new ligands
+        radius = max(radius, float(eps))
+
+        members = {}
+        for name, is_member, coord in zip(ligand_names, mask, coords):
+            if is_member:
+                # Strip _aligned.cif suffix if present, keep ID
+                clean_name = name.replace('_aligned.cif', '')
+                members[clean_name] = coord.tolist()
+
+        pockets[str(pocket_id)] = {
+            'centroid': centroid,
+            'radius': radius,
+            'n_members': int(stats[label]['size']),
+            'spread': float(stats[label]['spread']),
+            'members': members
+        }
+
+    anchor_data = {
+        'metadata': {
+            'created': datetime.now().isoformat(),
+            'eps': float(eps),
+            'n_pockets': len(pockets),
+            'n_compounds': len(ligand_names)
+        },
+        'pockets': pockets
+    }
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with open(output, 'w') as f:
+        json.dump(anchor_data, f, indent=2)
+
+    print(f"\n✓ Pocket anchors saved to {output_path}")
+    print(f"  {len(pockets)} pockets, {len(ligand_names)} compounds")
+    
 
 def main():
     """Main function"""
@@ -242,6 +306,9 @@ def main():
     print(f" - pocket_assignments.csv")
     write_cluster_stats(stats, args.output)
     print(f" - cluster_statistics.csv")
+
+    if args.save_anchors:
+        save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.save_anchors)
 
     # Print a summary
     print("\nPocket Summary:")
