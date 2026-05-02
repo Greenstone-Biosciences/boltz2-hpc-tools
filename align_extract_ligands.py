@@ -40,6 +40,11 @@ def parse_args():
         action='store_true',
         help="Verbose output"
     )
+    parser.add_argument(
+        "--reference-cif",
+        default=None,
+        help="Path to a specific CIF file to use as alignment reference (overrides auto-selection)"
+    )
     return parser.parse_args()
 
 
@@ -79,7 +84,7 @@ def find_cif_files(input_dir, verbose=False):
     return cif_files
 
 
-def align_structures(cif_files, verbose=False):
+def align_structures(cif_files, reference_cif=None, verbose=False):
     """Align all structures to the first as reference using Cα superposition.
     
     Args:
@@ -97,8 +102,8 @@ def align_structures(cif_files, verbose=False):
     
     aligned_structures = {}
     
-    # Use first file as reference
-    ref_file = cif_files[0]
+    # Use explicit reference if provided, otherwise first file alphabetically
+    ref_file = reference_cif if reference_cif else cif_files[0]
     ref_basename = Path(ref_file).name
     ref_name = Path(ref_file).stem
     
@@ -306,7 +311,7 @@ def main():
     
     # Align structures
     print("\nStep 2: Aligning structures...")
-    aligned_structures = align_structures(cif_files, args.verbose)
+    aligned_structures = align_structures(cif_files, args.reference_cif, args.verbose)
     
     # Extract ligand centroids
     print("\nStep 3: Extracting ligand centroids...")
