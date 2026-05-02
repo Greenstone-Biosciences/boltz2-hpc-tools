@@ -183,7 +183,7 @@ def write_pocket_assignments(ligand_names, labels, output_dir):
         writer.writerow(['Structure', 'Pocket', 'Cluster_Size'])
         for name, label in zip(ligand_names, labels):
             cluster_size = np.sum(labels == label)
-            writer.writerow([name, f"pocket{label + 1}", cluster_size]) # Change pocket IDs to 1-indexed
+            writer.writerow([name, label + 1, cluster_size]) # Change pocket IDs to 1-indexed and just an integer
 
 def write_cluster_stats(stats, output_dir):
     """Write cluster statistics to file.
@@ -198,7 +198,7 @@ def write_cluster_stats(stats, output_dir):
         writer = csv.writer(f)
         writer.writerow(['Pocket', 'N_ligands', 'Center_X', 'Center_Y', 'Center_Z', 'Spread_Angstrom'])
         for label in sorted(stats.keys()):
-            pocket_id = f"pocket{label + 1}"
+            pocket_id = label + 1
             size = stats[label]['size']
             cx, cy, cz = stats[label]['centroid']
             spread = stats[label]['spread']
@@ -248,7 +248,7 @@ def main():
     print(f"{'Pocket':<10} {'N Ligands':<12} {'Spread (Å)':<12} {'Quality'}")
     print("-" * 50)
     for label in sorted(stats.keys()):
-        pocket_id = f"pocket{label + 1}"
+        pocket_id = label + 1
         size = stats[label]['size']
         spread = stats[label]['spread']
 
