@@ -435,7 +435,7 @@ else
     # Save anchors if --save-seed specified
     if [[ -n "$SAVE_SEED_DIR" ]]; then
         mkdir -p "$SAVE_SEED_DIR"
-        POCKET_CMD+=("--save-anchors $SAVE_SEED_DIR/pocket_anchors.json")
+        POCKET_CMD+=("--save-anchors" "$SAVE_SEED_DIR/pocket_anchors.json")
     fi
 
     "${POCKET_CMD[@]}"

@@ -199,7 +199,7 @@ def write_pocket_assignments(ligand_names, labels, output_dir, already_indexed=F
             pocket_num = label if already_indexed else label + 1
             writer.writerow([name, pocket_num, cluster_size]) # Change pocket IDs to 1-indexed and just an integer
 
-def write_cluster_stats(stats, output_dir):
+def write_cluster_stats(stats, output_dir, already_indexed=False):
     """Write cluster statistics to file.
 
     Args:
@@ -212,12 +212,11 @@ def write_cluster_stats(stats, output_dir):
         writer = csv.writer(f)
         writer.writerow(['Pocket', 'N_ligands', 'Center_X', 'Center_Y', 'Center_Z', 'Spread_Angstrom'])
         for label in sorted(stats.keys()):
-            pocket_id = label + 1
+            pocket_id = label if already_indexed else label + 1
             size = stats[label]['size']
             cx, cy, cz = stats[label]['centroid']
             spread = stats[label]['spread']
             writer.writerow([pocket_id, size, f"{cx:.3f}", f"{cy:.3f}", f"{cz:.3f}", f"{spread:.3f}"])
-    pocket_id = label if already_indexed else label + 1
 
 def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
     """Save pocket anchor data to JSON for cross-run pocket assignment.
