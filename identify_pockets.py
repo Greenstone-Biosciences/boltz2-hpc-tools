@@ -49,6 +49,11 @@ def parse_args():
         default=None,
         help="Path to save pocket anchor JSON file for use in future seeded runs"
     )
+    parser.add_argument(
+        "--load-anchors",
+        default=None,
+        help="Path to pocket_anchors.json from a previous seed run for cross-run pocket assignment"
+     )
     return parser.parse_args()
 
 def read_centroids(filepath):
@@ -170,7 +175,7 @@ def calculate_cluster_stats(coords, labels):
 
     return stats
 
-def write_pocket_assignments(ligand_names, labels, output_dir):
+def write_pocket_assignments(ligand_names, labels, output_dir, already_indexed=False):
     """Write pocket assignments to file (of receptor-ligand combos).
 
     Args:
@@ -190,7 +195,9 @@ def write_pocket_assignments(ligand_names, labels, output_dir):
         writer.writerow(['Structure', 'Pocket', 'Cluster_Size'])
         for name, label in zip(ligand_names, labels):
             cluster_size = np.sum(labels == label)
-            writer.writerow([name, label + 1, cluster_size]) # Change pocket IDs to 1-indexed and just an integer
+            # Handle indexing
+            pocket_num = label if already_indexed else label + 1
+            writer.writerow([name, pocket_num, cluster_size]) # Change pocket IDs to 1-indexed and just an integer
 
 def write_cluster_stats(stats, output_dir):
     """Write cluster statistics to file.
@@ -210,6 +217,7 @@ def write_cluster_stats(stats, output_dir):
             cx, cy, cz = stats[label]['centroid']
             spread = stats[label]['spread']
             writer.writerow([pocket_id, size, f"{cx:.3f}", f"{cy:.3f}", f"{cz:.3f}", f"{spread:.3f}"])
+    pocket_id = label if already_indexed else label + 1
 
 def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
     """Save pocket anchor data to JSON for cross-run pocket assignment.
@@ -269,6 +277,94 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
     print(f"  {len(pockets)} pockets, {len(ligand_names)} compounds")
     
 
+def load_pocket_anchors(anchor_path):
+    """Load pocket anchors from previous run.
+
+    Args:
+        anchor_path: Path to anchors.json
+
+    Returns:
+        anchor_data: Full anchor dictionary
+        pocket_cenroids: dict of pocket_id (int) -> np.array centroid
+        pocket_radii: dict of pocket_id (int) -> float radius
+    """
+    with open(anchor_path, 'r') as f:
+        anchor_data = json.load(f)
+
+    pocket_centroids = {}
+    pocket_radii = {}
+    for pid_str, pdata in anchor_data['pockets']items():
+        pid = int(pid_str)
+        pocket_centroids[pid = np.array(pdata['centroid'])
+        pocket_radii[pid] = float(pdata['radius'])
+
+    print(f"✓ Loaded {len(pocket_centroids)} pocket anchors from {anchor_path}")
+    print(f"  Original run: {anchor_data['metadata']['n_compounds']} compounds, "
+          f"eps={anchor_data['metadata']['eps']} Å")
+    return anchor_data, pocket_centroids, pocket_radii
+
+
+def assign_to_anchors(coords, ligand_names, pocket_centroids, pocket_radii, eps, min_samples):
+    """Assign new ligands to existing pockets via bounding sphere, with DBSCAN on residuals.
+
+    Args:
+        coords: numpy array of (x, y, z) centroids for new compounds
+        ligand_names: list of structure names
+        pocket_centroids: dict of pocket_id -> np.array centroid
+        pocket_radii: dict of pocket_id -> float radius
+        eps: DBSCAN eps
+        min_samples: DBSCAN min_samples for residual clustering
+
+    Returns:
+        labels: array of pocket assignments (1-indexed, matching existing IDso or new)
+        matched: boolean array, True if assigned to existing pocket
+    """
+    labels = np.full(len(coords), -1, dtype=int)
+    matched = np.zeros(len(coords), dtype=bool)
+
+    pocket_ids = sorted(pocket_centroids.keys())
+
+    for i, coord in enumerate(coords):
+        best_pid = None
+        best_dict = np.inf
+
+        for pid in pocket.ids:
+            dist = np.linalg.norm(coord - pocket_centroids[pid])
+            if dist <= pocket_radii[pid] and dist < best_dist:
+                best_dist = dist
+                best_pid = pid
+
+        if best_pid is not None:
+            labels[i] = best_pid
+            matched[i] = True
+
+#   DBSCAN on unmatched results
+    unmatched_idx = np.where(~matched)[0]
+    if len(unmatched_idx) > 0:
+        max_existing = max(pocket_ids)
+        unmatched_coords = coords[unmatched_idx]
+
+        if len(unmatched_coords) == 1:
+            # Single residual get next ID
+            labels[unmatched_idx[0]] = max_existing + 1
+        else:
+            residual_labels = cluster_ligands(unmatched_coords, eps, min_samples)
+            residual_labels = reassign_noise(residual_labels)
+#           Offset new labels above existing pocket IDs
+            for i, idx in enumerate(unmatched_idx):
+                labels[idx] = max_existing + residual_labels[i] + 1
+
+    n_matched = int(np.sum(matched))
+    n_new = len(unmatched_idx)
+    print(f"\nAssignment summary:")
+    print(f"  {n_matched} compounds assigned to existing pockets")
+    print(f"  {n_new} compounds assigned to new pockets")
+
+    return labels, matched
+
+        
+
+
 def main():
     """Main function"""
 
@@ -284,10 +380,25 @@ def main():
 #    print(f"DEBUG, ligand names: {ligand_names}")
 #    print(f"DEBUG, coords: {coords}")
 
-    # Clusters ligand centroids
-    print(f"\nClustering with DBSCAN (eps={args.threshold} Å, min_samples={args.min_samples})")
-    labels = cluster_ligands(coords, args.threshold, args.min_samples)
-#    print(f"DEBUG, labels after clustering: {labels}")
+    # Clusters or assign to anchors depending on mode
+    if args.load_anchors:
+        print(f"\nSeeded mode: assigning to existing pockets from {args.load_anchors}")
+        anchor_data, pocket_centroids, pocket_radii = load_pocket_anchors(args.load_anchors)
+        labels, matched = assign_to_anchors(
+            coords, ligand_names, pocket_centroids, pocket_radii,
+            args.threshold, args.min_samples
+        )
+
+        # Convert to 0-indexed for stats functions, then back
+        # Labels are already 1-indexed from anchor IDs - adjust stats
+        n_clusters = len(np.unique(labels))
+        print(f"  {n_clusters} total pockets ({len(pocket_centroids)} existing + new)")
+    else:
+        print(f"\nClustering with DBSCAN (eps={args.threshold} Å, min_samples={args.min_samples})")
+        labels = cluster_ligands(coords, args.threshold, args.min_samples)
+        labels = reassign_noise(labels)
+        n_clusters = len(np.unique(labels))
+        print(f"Identified {n_clusters} binding pocket(s)")
 
     # Reassign noise points from clustering
     labels = reassign_noise(labels)
@@ -302,9 +413,9 @@ def main():
 
     # Write pocket assingment outputs and clusters stats to files
     print(f"\nWriting results to: {args.output}/")
-    write_pocket_assignments(ligand_names, labels, args.output)
+    write_pocket_assignments(ligand_names, labels, args.output, already_indexed=bool(args.load_anchors))
     print(f" - pocket_assignments.csv")
-    write_cluster_stats(stats, args.output)
+    write_cluster_stats(stats, args.output, already_indexed=bool(args.load_anchors))
     print(f" - cluster_statistics.csv")
 
     if args.save_anchors:
