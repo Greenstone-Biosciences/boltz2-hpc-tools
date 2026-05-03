@@ -400,12 +400,6 @@ def main():
         n_clusters = len(np.unique(labels))
         print(f"Identified {n_clusters} binding pocket(s)")
 
-    # Reassign noise points from clustering
-    labels = reassign_noise(labels)
-    # print(f"DEBUG, labels after reassigning noise: {labels}")
-
-    n_clusters = len(np.unique(labels))
-    print(f"Identified {n_clusters} binding pocket(s)")
 
     # Calculate stats of the clusters
     stats = calculate_cluster_stats(coords, labels)
