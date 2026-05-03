@@ -14,6 +14,8 @@ VERBOSE=false
 CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-5.0}"
 DRY_RUN=false
 SAVE_ALIGNED=false #Default: do not save aligned CIFs
+SEED_DIR=""        # --seed: load reference.cif + pocket_anchors.json from here
+SAVE_SEED_DIR=""   # --save-seed: save reference.cif + pocket_anchors.json here
 
 # Help message
 show_help() {
@@ -36,6 +38,8 @@ Optional Arguments:
                               Set via CLUSTER_THRESHOLD environment variable
     --save-aligned            Save aligned CIF files (default: false)
     --dry-run                 Show what files would be processed without running analysis
+    --seed DIR                Load seed dir (reference.cif + pocket_anchors.json) for cross-run pocket assignment
+    --save-seed DIR           After run, save reference.cif and pocket_anchors.json to this directory for use in future seeded runs
     -v, --verbose             Verbose output
     -h, --help                Show this help message
 
@@ -100,6 +104,14 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_help
             ;;
+        --seed)
+            SEED_DIR="$2"
+            shift 2
+            ;;
+        --save-seed)
+            SAVE_SEED_DIR="$2"
+            shift 2
+            ;;
         *)
             echo "Error: Unknown option: $1" >&2
             echo "Use -h or --help for usage information" >&2
@@ -126,6 +138,27 @@ if [[ ! -d "$INPUT_DIR" ]]; then
 	exit 1
 fi
 
+# Validate seed directory if provided
+if [[ -n "$SEED_DIR" ]]; then
+    if [[ ! -d "$SEED_DIR" ]]; then
+         echo "Error: Seed directory '$SEED_DIR' not found" >&2
+         exit 1
+    fi
+    if [[ ! -f "$SEED_DIR/reference.cif" ]]; then
+        echo "Error: No reference.cif found in seed directory '$SEED_DIR'" >&2
+        exit 1
+    fi
+    if [[ ! -f "$SEED_DIR/pocket_anchors.json" ]]; then
+        echo "Error: No pocket_anchors.json found in seed directory '$SEED_DIR'" >&2
+        exit 1
+    fi
+fi
+
+# Validate save-seed dir is different from seed dir
+if [[ -n "$SEED_DIR" && -n "$SAVE_SEED_DIR" && "$SEED_DIR" == "$SAVE_SEED_DIR" ]]; then
+    echo "Error: --seed and --save-seed must point to different directories" >&2
+    exit 1
+fi
 
 # Check for .cif files - conditional detection for Boltz2 output structures
 # mapfile -t CIF_FILES < <(find "$INPUT_DIR" -maxdepth 4 -name "*.cif" -type f | sort)
@@ -229,6 +262,12 @@ echo "Output directory:     $OUTPUT_DIR"
 echo "CIF files found:      $CIF_COUNT"
 echo "Cluster threashold:   $CLUSTER_THRESHOLD Å"
 echo "Save aligned:         $SAVE_ALIGNED"
+if [[ -n "$SEED_DIR" ]]; then
+    echo "Seed directory:       $SEED_DIR"
+fi
+if [[ -n "$SAVE_SEED_DIR" ]]; then
+    echo "Save seed to:         $SAVE_SEED_DIR"
+fi
 echo "============================================"
 echo ""
 
@@ -260,6 +299,11 @@ fi
 
 if [[ "$VERBOSE" == true ]]; then
     ALIGN_CMD="$ALIGN_CMD -v"
+fi
+
+# Pass seed reference CIF to alignment script if in seeded mode
+if [[ -n "$SEED_DIR" ]]; then
+    ALIGN_CMD="$ALIGN_CMD --reference-cif $SEED_DIR/reference.cif"
 fi
 
 # Run alignment and extraction
@@ -377,11 +421,24 @@ if [[ ! -f "$POCKET_SCRIPT" ]]; then
     echo "Warning: $POCKET_SCRIPT not found in current directory" >&2
     echo "Skipping pocket identification." >&2
 else
-    # Run pocket identification
-    python3 "$POCKET_SCRIPT" \
+    # Build pocket identification command
+    POCKET_CMD="python3 $POCKET_SCRIPT" \
         -i "$CENTROID_FILE" \
         -o "$OUTPUT_DIR" \
         -t "${CLUSTER_THRESHOLD:-5.0}"
+
+    # Seeded mode: load existing anchors
+    if [[ -n "$SEED_DIR" ]]; then
+        POCKET_CMD="$POCKET_CMD --load-anchors $SEED_DIR/pocket_anchors.json"
+    fi
+
+    # Save anchors if --save-seed specified
+    if [[ -n "$SAVE_SEED_DIR" ]]; then
+        mkdir -p "$SAVE_SEED_DIR"
+        POCKET_CMD="$POCKET_CMD --save-anchors $SAVE_SEED_DIR/pocket_anchors.json"
+    fi
+
+    eval $POCKET_CMD
 
     if [[ $? -eq 0 ]]; then
         echo ""
@@ -390,6 +447,20 @@ else
         echo "Error: Pocket identification failed" >&2
         echo "Continuing with available results..." >&2
     fi
+fi
+
+# Save seed: copy reference CIF after successful run
+if [[ -n "$SAVE_SEED_DIR" ]]; then
+# Determine which CIF was used as reference (first alphabetically)
+    if [[ -n "$SEED_DIR" ]]; then
+        REF_CIF="$SEED_DIR/reference.cif"
+    else
+        REF_CIF="${CIF_FILES[0]}"
+    fi
+    cp "$REF_CIF" "$SAVE_SEED_DIR/reference.cif"
+    echo "✓ Seed saved to $SAVE_SEED_DIR/"
+    echo "  reference.cif   — alignment reference structure"
+    echo "  pocket_anchors.json — pocket centroids and member ledger"
 fi
 
 
@@ -406,5 +477,9 @@ echo "  ligand_deviations.csv   Distances from average"
 if [[ -f "$OUTPUT_DIR/pocket_assignments.csv" ]]; then
     echo "  pocket_assignments.csv  Pocket IDs per ligand"
     echo "  cluster_statistics.csv  Per-pocket cluster statistics"
+fi
+if [[ -n "$SAVE_SEED_DIR" ]]; then
+    echo "  $SAVE_SEED_DIR/reference.cif"
+    echo "  $SAVE_SEED_DIR/pocket_anchors.json"
 fi
 echo "========================================"
