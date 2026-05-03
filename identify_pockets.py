@@ -325,9 +325,9 @@ def assign_to_anchors(coords, ligand_names, pocket_centroids, pocket_radii, eps,
 
     for i, coord in enumerate(coords):
         best_pid = None
-        best_dict = np.inf
+        best_dist = np.inf
 
-        for pid in pocket.ids:
+        for pid in pocket_ids:
             dist = np.linalg.norm(coord - pocket_centroids[pid])
             if dist <= pocket_radii[pid] and dist < best_dist:
                 best_dist = dist
