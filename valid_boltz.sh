@@ -291,23 +291,23 @@ if [[ ! -f "$ALIGN_SCRIPT" ]]; then
 fi
 
 # Build commands with optional flags
-ALIGN_CMD="python3 $ALIGN_SCRIPT -i $INPUT_DIR -o $OUTPUT_DIR"
+ALIGN_CMD=(python3 "$ALIGN_SCRIPT" -i "$INPUT_DIR" -o "$OUTPUT_DIR")
 
 if [[ "$SAVE_ALIGNED" == true ]]; then
-    ALIGN_CMD="$ALIGN_CMD --save-aligned"
+    ALIGN_CMD+=(--save-aligned)
 fi
 
 if [[ "$VERBOSE" == true ]]; then
-    ALIGN_CMD="$ALIGN_CMD -v"
+    ALIGN_CMD+=(-v)
 fi
 
 # Pass seed reference CIF to alignment script if in seeded mode
 if [[ -n "$SEED_DIR" ]]; then
-    ALIGN_CMD="$ALIGN_CMD --reference-cif $SEED_DIR/reference.cif"
+    ALIGN_CMD+=(--reference-cif "$SEED_DIR/reference.cif")
 fi
 
 # Run alignment and extraction
-$ALIGN_CMD
+"${ALIGN_CMD[@]}"
 
 if [[ $? -ne 0 ]]; then
     echo "Error: Alignment and extraction failed" >&2
@@ -422,23 +422,23 @@ if [[ ! -f "$POCKET_SCRIPT" ]]; then
     echo "Skipping pocket identification." >&2
 else
     # Build pocket identification command
-    POCKET_CMD="python3 $POCKET_SCRIPT" \
-        -i "$CENTROID_FILE" \
-        -o "$OUTPUT_DIR" \
-        -t "${CLUSTER_THRESHOLD:-5.0}"
+    POCKET_CMD=(python3 "$POCKET_SCRIPT"
+        -i "$CENTROID_FILE"
+        -o "$OUTPUT_DIR"
+        -t "${CLUSTER_THRESHOLD:-5.0}")
 
     # Seeded mode: load existing anchors
     if [[ -n "$SEED_DIR" ]]; then
-        POCKET_CMD="$POCKET_CMD --load-anchors $SEED_DIR/pocket_anchors.json"
+        POCKET_CMD+=("--load-anchors" "$SEED_DIR/pocket_anchors.json")
     fi
 
     # Save anchors if --save-seed specified
     if [[ -n "$SAVE_SEED_DIR" ]]; then
         mkdir -p "$SAVE_SEED_DIR"
-        POCKET_CMD="$POCKET_CMD --save-anchors $SAVE_SEED_DIR/pocket_anchors.json"
+        POCKET_CMD+=("--save-anchors $SAVE_SEED_DIR/pocket_anchors.json")
     fi
 
-    eval $POCKET_CMD
+    "${POCKET_CMD[@]}"
 
     if [[ $? -eq 0 ]]; then
         echo ""
