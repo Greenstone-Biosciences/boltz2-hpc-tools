@@ -293,9 +293,9 @@ def load_pocket_anchors(anchor_path):
 
     pocket_centroids = {}
     pocket_radii = {}
-    for pid_str, pdata in anchor_data['pockets']items():
+    for pid_str, pdata in anchor_data['pockets'].items():
         pid = int(pid_str)
-        pocket_centroids[pid = np.array(pdata['centroid'])
+        pocket_centroids[pid] = np.array(pdata['centroid'])
         pocket_radii[pid] = float(pdata['radius'])
 
     print(f"✓ Loaded {len(pocket_centroids)} pocket anchors from {anchor_path}")
