@@ -12,6 +12,7 @@ INPUT_DIR=""
 OUTPUT_DIR=""
 VERBOSE=false
 CLUSTER_THRESHOLD="${CLUSTER_THRESHOLD:-5.0}"
+MIN_SAMPLES="${MIN_SAMPLES:-1}"
 DRY_RUN=false
 SAVE_ALIGNED=false #Default: do not save aligned CIFs
 SEED_DIR=""        # --seed: load reference.cif + pocket_anchors.json from here
@@ -36,6 +37,7 @@ Optional Arguments:
     -o, --output DIR          Output directory (default: ./analysis_output)
     -t, --threshold FLOAT     Clustering threshold in Å (default: 5.0)
                               Set via CLUSTER_THRESHOLD environment variable
+    --min-samples INT         Minimum samples per cluster for DBSCAN (default: 1)
     --save-aligned            Save aligned CIF files (default: false)
     --dry-run                 Show what files would be processed without running analysis
     --seed DIR                Load seed dir (reference.cif + pocket_anchors.json) for cross-run pocket assignment
@@ -87,6 +89,10 @@ while [[ $# -gt 0 ]]; do
         -t|--threshold)
             # Clustering threshold in Angstroms
             CLUSTER_THRESHOLD="$2"
+            shift 2
+            ;;
+        --min-samples)
+            MIN_SAMPLES="$2"
             shift 2
             ;;
         --save-aligned)
@@ -261,6 +267,7 @@ echo "Input directory:      $INPUT_DIR"
 echo "Output directory:     $OUTPUT_DIR"
 echo "CIF files found:      $CIF_COUNT"
 echo "Cluster threashold:   $CLUSTER_THRESHOLD Å"
+echo "Min samples:          $MIN_SAMPLES"
 echo "Save aligned:         $SAVE_ALIGNED"
 if [[ -n "$SEED_DIR" ]]; then
     echo "Seed directory:       $SEED_DIR"
@@ -425,7 +432,9 @@ else
     POCKET_CMD=(python3 "$POCKET_SCRIPT"
         -i "$CENTROID_FILE"
         -o "$OUTPUT_DIR"
-        -t "${CLUSTER_THRESHOLD:-5.0}")
+        -t "${CLUSTER_THRESHOLD:-5.0}"
+        --min-samples "$MIN_SAMPLES"
+        )
 
     # Seeded mode: load existing anchors
     if [[ -n "$SEED_DIR" ]]; then
