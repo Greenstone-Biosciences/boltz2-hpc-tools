@@ -419,7 +419,7 @@ def main():
     print(f"{'Pocket':<10} {'N Ligands':<12} {'Spread (Å)':<12} {'Quality'}")
     print("-" * 50)
     for label in sorted(stats.keys()):
-        pocket_id = label + 1
+        pocket_id = label if args.load_anchors else label + 1
         size = stats[label]['size']
         spread = stats[label]['spread']
 
