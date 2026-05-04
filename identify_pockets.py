@@ -218,7 +218,7 @@ def write_cluster_stats(stats, output_dir, already_indexed=False):
             spread = stats[label]['spread']
             writer.writerow([pocket_id, size, f"{cx:.3f}", f"{cy:.3f}", f"{cz:.3f}", f"{spread:.3f}"])
 
-def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
+def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, output_path):
     """Save pocket anchor data to JSON for cross-run pocket assignment.
     
     Args:
@@ -231,6 +231,9 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, output_path):
     """
     pockets = {}
     for label in sorted(stats.keys()):
+#       We skip any anchors that are < than the min_samples provided in seed
+        if stats[label]['size'] < min_samples:
+            continue
         pocket_id = label + 1
         mask = label == labels
         centroid = stats[label]['centroid'].tolist()
@@ -411,8 +414,9 @@ def main():
     write_cluster_stats(stats, args.output, already_indexed=bool(args.load_anchors))
     print(f" - cluster_statistics.csv")
 
+    # Saving pocket anchors
     if args.save_anchors:
-        save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.save_anchors)
+        save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.min_samples,  args.save_anchors)
 
     # Print a summary
     print("\nPocket Summary:")
