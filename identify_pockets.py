@@ -238,10 +238,10 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, o
         mask = label == labels
         centroid = stats[label]['centroid'].tolist()
 
-        # Radius: 95th percentile distance from centroid (robust to outliers)
+        # Radius: 100th percentile distance from centroid. Adding 2.5Å buffer
         cluster_coords = coords[mask]
         distances = np.linalg.norm(cluster_coords - stats[label]['centroid'], axis=1)
-        radius = float(np.percentile(distances, 95)) if len(distances) > 1 else float(eps)
+        radius = float(np.max(distances)) + 2.5 if len(distances) > 1 else float(eps) + 2.5
         # Minimum radius is eps so single-compound pockets still catch nearby new ligands
         radius = max(radius, float(eps))
 
@@ -364,7 +364,33 @@ def assign_to_anchors(coords, ligand_names, pocket_centroids, pocket_radii, eps,
 
     return labels, matched
 
-        
+def check_sphere_overlaps(pockets):
+    """Check if any pocket bounding spheres overlap and warn.
+
+    Args:
+        pockets: dict of pocket_id -> {centroid, radius, ...}
+    """
+    ids = sorted(pockets.keys())
+    overlaps = []
+    for i, pid_a in enumerate(ids):
+        for pid_b in ids[i+1:]:
+            ca = np.array(pockets[pid_a]['centroid'])
+            cb = np.array(pockets[pid_b]['centroid'])
+            dist = np.linalg.norm(ca - cb)
+            combined_radii = pockets[pid_a]['radius'] + pockets[pid_b]['radius']
+            if dist < combined_radii:
+                overlaps.append((pid_a, pid_b, dist, combined_radii))
+
+    if overlaps:
+        print(f"\n⚠ Warning: {len(overlaps)} overlapping pocket sphere pair(s):")
+        for pid_a, pid_b, dist, combined in overlaps:
+            print(f"  Pocket {pid_a} and Pocket {pid_b}: "
+                f"centroid dist={dist:.2f}Å, combined radii={combined:.2f}Å")
+    else:
+        print("\n✓ No overlapping pocket spheres")
+
+    return overlaps
+
 
 
 def main():
@@ -417,6 +443,10 @@ def main():
     # Saving pocket anchors
     if args.save_anchors:
         save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.min_samples,  args.save_anchors)
+
+
+    # Check for overlapping spheres/pockets
+    check_sphere_overlaps(pockets)
 
     # Print a summary
     print("\nPocket Summary:")
