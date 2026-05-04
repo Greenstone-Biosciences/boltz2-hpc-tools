@@ -432,7 +432,7 @@ else
     POCKET_CMD=(python3 "$POCKET_SCRIPT"
         -i "$CENTROID_FILE"
         -o "$OUTPUT_DIR"
-        -t "${CLUSTER_THRESHOLD:-5.0}"
+        -t "$CLUSTER_THRESHOLD"
         --min-samples "$MIN_SAMPLES"
         )
 
