@@ -277,6 +277,7 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, o
 
     # Check for overlapping spheres/pockets
     check_sphere_overlaps(pockets)
+    return len(overlaps) # add return value
 
     print(f"\n✓ Pocket anchors saved to {output_path}")
     print(f"  {len(pockets)} pockets, {len(ligand_names)} compounds")
@@ -415,6 +416,7 @@ def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, 
         'n_existing_pockets': n_existing_pockets,
         'n_new_pockets': n_new_pockets,
         'n_total_pockets': n_existing_pockets + n_new_pockets
+        'n_overlapping_sphere_pairs': n_overlapping_pairs
     }
     output_path = Path(args.output) / 'run_summary.json'
     with open(output_path, 'w') as f:
@@ -466,7 +468,7 @@ def main():
     stats = calculate_cluster_stats(coords, labels)
    #  print(f"DEBUG, cluster stats: {stats}")
 
-    # Write pocket assingment outputs and clusters stats to files
+    # Write pocket assignment outputs and clusters stats to files
     print(f"\nWriting results to: {args.output}/")
     write_pocket_assignments(ligand_names, labels, args.output, already_indexed=bool(args.load_anchors))
     print(f" - pocket_assignments.csv")
@@ -474,8 +476,9 @@ def main():
     print(f" - cluster_statistics.csv")
 
     # Saving pocket anchors
+    n_overlapping_pairs = 0
     if args.save_anchors:
-        save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.min_samples,  args.save_anchors)
+        n_overlapping_pairs = save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.min_samples,  args.save_anchors)
 
 
 
