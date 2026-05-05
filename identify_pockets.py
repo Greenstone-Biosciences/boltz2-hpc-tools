@@ -275,6 +275,9 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, o
     with open(output, 'w') as f:
         json.dump(anchor_data, f, indent=2)
 
+    # Check for overlapping spheres/pockets
+    check_sphere_overlaps(pockets)
+
     print(f"\n✓ Pocket anchors saved to {output_path}")
     print(f"  {len(pockets)} pockets, {len(ligand_names)} compounds")
     
@@ -393,6 +396,32 @@ def check_sphere_overlaps(pockets):
 
 
 
+# Write a run summary into a json
+def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, n_existing_pockets, n_new_pockets, seed_dir=None):
+    """Write run summary JSON for programmatic parsing. Logs input and output dirs, seed dirs, what parameters were used in runs and the pockets numbers from summary."""
+    summary = {
+        'timestamp': datetime.now().isoformat(),
+        'mode': mode,
+        'input_dir': str(args.input),
+        'output_dir': str(args.output),
+        'seed_dir': str(seed_dir) if seed_dir else None,
+        'params': {
+              'eps': args.threshold,
+              'min_samples': args.min_samples,
+        },
+        'n_input': n_input,
+        'n_assigned_existing': n_assigned_existing,
+        'n_assigned_new': n_assigned_new,
+        'n_existing_pockets': n_existing_pockets,
+        'n_new_pockets': n_new_pockets,
+        'n_total_pockets': n_existing_pockets + n_new_pockets
+    }
+    output_path = Path(output_dir) / 'run_summary.json'
+    with open(output_path, 'w') as f:
+        json.dump(summary, f, indent=2)
+    print(f"✓ Run summary saved to run_summary.json")
+
+
 def main():
     """Main function"""
 
@@ -445,8 +474,6 @@ def main():
         save_pocket_anchors(ligand_names, coords, labels, stats, args.threshold, args.min_samples,  args.save_anchors)
 
 
-    # Check for overlapping spheres/pockets
-    check_sphere_overlaps(pockets)
 
     # Print a summary
     print("\nPocket Summary:")
@@ -469,6 +496,17 @@ def main():
 
         print(f"{pocket_id:<10} {size:<12} {spread:<12.3f} {quality}")
 
+    # Write a run summary to JSON in output dir
+    write_run_summary(
+        args, 
+        mode='seeded' if args.load_anchors else 'fresh',
+        n_input=len(ligand_names),
+        n_assigned_existing=int(np.sum(matched)) if args.load_anchors else len(ligand_names),
+        n_assigned_new=int(np.sum(~matched)) if args.load_anchors else 0,
+        n_existing_pockets=len(pocket_centroids) if args.load_anchors else 0,
+        n_new_pockets=n_clusters - (len(pocket_centroids) if args.load_anchors else 0),
+        seed_dir=args.load_anchors
+    )
 
 
 if __name__ == "__main__":
