@@ -231,9 +231,8 @@ def extract_ligand_centroids(aligned_structures, ligand_resname="LIG1", verbose=
                   f"({centroid[0]:8.3f}, {centroid[1]:8.3f}, {centroid[2]:8.3f})".ljust(35) + 
                   f"{len(coords):>10}")
         else:
-            if verbose:
-                print(f"{name}: No {ligand_resname} ligand found", file=sys.stderr)
-    
+            print(f"⚠ WARNING: No {ligand_resname} ligand found in {name}", file=sys.stderr)
+
     print(f"\n✓ Extracted {len(ligand_data)} ligand centroids")
     
     return ligand_data
