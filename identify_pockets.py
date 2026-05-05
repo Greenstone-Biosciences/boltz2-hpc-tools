@@ -416,7 +416,7 @@ def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, 
         'n_new_pockets': n_new_pockets,
         'n_total_pockets': n_existing_pockets + n_new_pockets
     }
-    output_path = Path(output_dir) / 'run_summary.json'
+    output_path = Path(args.output) / 'run_summary.json'
     with open(output_path, 'w') as f:
         json.dump(summary, f, indent=2)
     print(f"✓ Run summary saved to run_summary.json")
