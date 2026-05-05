@@ -351,7 +351,7 @@ SUM_Z=0
 COUNT=0
 
 while IFS=',' read -r FILE X Y Z N; do
-	[[ "$STRUCTURE" == "Structure" ]] && continue
+	[[ "$FILE" == "Structure" ]] && continue
 	SUM_X=$(echo "$SUM_X + $X" | bc)
 	SUM_Y=$(echo "$SUM_Y + $Y" | bc)
 	SUM_Z=$(echo "$SUM_Z + $Z" | bc)
@@ -387,7 +387,7 @@ echo "--------------------------------------------------------------------------
 
 
 while IFS=',' read -r FILE X Y Z N; do
-	[[ "$STRUCTURE" == "Structure" ]] && continue
+	[[ "$FILE" == "Structure" ]] && continue
 
 	# Calculate distance from average (magnitude)
 	DX=$(echo "$X - $AVG_X" | bc)
@@ -403,8 +403,8 @@ while IFS=',' read -r FILE X Y Z N; do
 		NORM_Z=$(echo "scale=3; $DZ / $DIST" | bc)
 	else
 		NORM_X=0.000
-		NORM_X=0.000
-		NORM_X=0.000
+		NORM_Y=0.000
+		NORM_Z=0.000
 	fi
 
 	# Safe to file

@@ -437,6 +437,10 @@ def main():
 #    print(f"DEBUG, ligand names: {ligand_names}")
 #    print(f"DEBUG, coords: {coords}")
 
+    # Safe defaults — overwritten in seeded mode
+    matched = np.zeros(len(coords), dtype=bool)
+    pocket_centroids = {}
+
     # Clusters or assign to anchors depending on mode
     if args.load_anchors:
         print(f"\nSeeded mode: assigning to existing pockets from {args.load_anchors}")
