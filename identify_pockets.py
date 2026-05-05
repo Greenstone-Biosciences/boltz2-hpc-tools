@@ -504,7 +504,7 @@ def main():
         n_assigned_existing=int(np.sum(matched)) if args.load_anchors else len(ligand_names),
         n_assigned_new=int(np.sum(~matched)) if args.load_anchors else 0,
         n_existing_pockets=len(pocket_centroids) if args.load_anchors else 0,
-        n_new_pockets=n_clusters - (len(pocket_centroids) if args.load_anchors else 0),
+        n_new_pockets=len(np.unique(labels[~matched])) if args.load_anchors else n_clusters,
         seed_dir=args.load_anchors
     )
 

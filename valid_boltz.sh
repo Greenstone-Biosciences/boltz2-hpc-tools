@@ -225,6 +225,9 @@ rm "$OUTPUT_DIR/.write_test"
 mkdir -p "$OUTPUT_DIR/aligned_cifs"
 mkdir -p "$OUTPUT_DIR/logs"
 
+# Log the command used for this run
+echo "$0 $*" > "$OUTPUT_DIR/logs/run_command.txt"
+
 # Check gemmi is available in environment
 if ! python3 -c "import gemmi" 2>/dev/null; then
     echo "Error: gemmi not found. Install with: pip install gemmi" >&2
