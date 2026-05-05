@@ -238,10 +238,10 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, o
         mask = label == labels
         centroid = stats[label]['centroid'].tolist()
 
-        # Radius: 100th percentile distance from centroid. Adding 2.5Å buffer
+        # Radius: 100th percentile distance from centroid. Can consider adding buffer.
         cluster_coords = coords[mask]
         distances = np.linalg.norm(cluster_coords - stats[label]['centroid'], axis=1)
-        radius = float(np.max(distances)) + 2.5 if len(distances) > 1 else float(eps) + 2.5
+        radius = float(np.max(distances)) if len(distances) > 1 else float(eps)
         # Minimum radius is eps so single-compound pockets still catch nearby new ligands
         radius = max(radius, float(eps))
 
