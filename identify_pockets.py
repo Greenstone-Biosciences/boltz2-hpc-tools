@@ -276,7 +276,7 @@ def save_pocket_anchors(ligand_names, coords, labels, stats, eps, min_samples, o
         json.dump(anchor_data, f, indent=2)
 
     # Check for overlapping spheres/pockets
-    check_sphere_overlaps(pockets)
+    overlaps = check_sphere_overlaps(pockets)
     return len(overlaps) # add return value
 
     print(f"\n✓ Pocket anchors saved to {output_path}")
@@ -398,7 +398,7 @@ def check_sphere_overlaps(pockets):
 
 
 # Write a run summary into a json
-def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, n_existing_pockets, n_new_pockets, seed_dir=None):
+def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, n_existing_pockets, n_new_pockets, seed_dir=None, n_overlapping_pairs=0):
     """Write run summary JSON for programmatic parsing. Logs input and output dirs, seed dirs, what parameters were used in runs and the pockets numbers from summary."""
     summary = {
         'timestamp': datetime.now().isoformat(),
@@ -415,7 +415,7 @@ def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, 
         'n_assigned_new': n_assigned_new,
         'n_existing_pockets': n_existing_pockets,
         'n_new_pockets': n_new_pockets,
-        'n_total_pockets': n_existing_pockets + n_new_pockets
+        'n_total_pockets': n_existing_pockets + n_new_pockets,
         'n_overlapping_sphere_pairs': n_overlapping_pairs
     }
     output_path = Path(args.output) / 'run_summary.json'
@@ -512,7 +512,8 @@ def main():
         n_assigned_new=int(np.sum(~matched)) if args.load_anchors else 0,
         n_existing_pockets=len(pocket_centroids) if args.load_anchors else 0,
         n_new_pockets=len(np.unique(labels[~matched])) if args.load_anchors else n_clusters,
-        seed_dir=args.load_anchors
+        seed_dir=args.load_anchors,
+        n_overlapping_pairs=n_overlapping_pairs
     )
 
 
