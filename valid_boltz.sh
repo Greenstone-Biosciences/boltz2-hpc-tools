@@ -438,6 +438,7 @@ else
         -o "$OUTPUT_DIR"
         -t "$CLUSTER_THRESHOLD"
         --min-samples "$MIN_SAMPLES"
+        --cif-input-dir "$INPUT_DIR"
         )
 
     # Seeded mode: load existing anchors

@@ -54,6 +54,11 @@ def parse_args():
         default=None,
         help="Path to pocket_anchors.json from a previous seed run for cross-run pocket assignment"
      )
+    parser.add_argument(
+        "--cif-input-dir",
+        default=None,
+        help="Original CIF input directory, passed from valid_boltz.sh for traceability"
+     )
     return parser.parse_args()
 
 def read_centroids(filepath):
@@ -403,7 +408,12 @@ def write_run_summary(args, mode, n_input, n_assigned_existing, n_assigned_new, 
     summary = {
         'timestamp': datetime.now().isoformat(),
         'mode': mode,
-        'input_dir': str(args.input),
+        # cif_input_dir: the original Boltz2 output directory, passed from valid_boltz.sh
+        # This is the authoritative source path — independent of output directory naming
+        'cif_input_dir': str(args.cif_input_dir) if args.cif_input_dir else None,
+        # ligand_centers_path: intermediate CSV produced by align_extract_ligands.py
+        # identify_pockets.py reads from here, not directly from CIFs
+        'ligand_centers_path': str(args.input),
         'output_dir': str(args.output),
         'seed_dir': str(seed_dir) if seed_dir else None,
         'params': {
