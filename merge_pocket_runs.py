@@ -92,6 +92,14 @@ def parse_args():
         help="Exclude pockets with fewer than N total members across all libraries "
              "(default: 1 — include all pockets including singletons)"
     )
+    parser.add_argument(
+        "--anchors",
+        default=None,
+        metavar="POCKET_ANCHORS_JSON",
+        help="Path to pocket_anchors.json from the seed run. When provided, adds "
+             "frozen centroid coordinates (Center_X/Y/Z), seed spread (Seed_Spread_A), "
+             "and quality label (Quality) to pocket_summary.csv."
+    )
     return parser.parse_args()
 
 
@@ -351,6 +359,75 @@ def calculate_coordinate_stats(pockets, run_dirs):
 
 
 # ---------------------------------------------------------------------------
+# Anchor stats loader
+# ---------------------------------------------------------------------------
+
+def load_anchor_stats(anchors_path):
+    """Load frozen pocket centroid coordinates and spread from pocket_anchors.json.
+
+    pocket_anchors.json is written by identify_pockets.py during the seed run
+    (--save-anchors). It contains the CHEMBL-derived pocket centroids and radii
+    that are frozen forever as the coordinate reference for all subsequent runs.
+
+    We read these here purely for reporting — centroid coordinates, seed-run spread,
+    and a quality label derived from spread. None of these values are modified.
+
+    Quality thresholds match identify_pockets.py's pocket summary display:
+        Tight:    spread < 2.0 Å  — compact, likely a single real binding site
+        Moderate: spread < 5.0 Å  — reasonably focused
+        Loose:    spread ≥ 5.0 Å  — diffuse, may reflect DBSCAN chaining artefact
+
+    Returns dict: {pocket_id (int): {Center_X, Center_Y, Center_Z, Seed_Spread_A, Quality}}
+    Returns empty dict if anchors_path is None (--anchors not provided).
+    """
+    if anchors_path is None:
+        return {}
+
+    anchors_file = Path(anchors_path)
+    if not anchors_file.exists():
+        print(f"Error: pocket_anchors.json not found at {anchors_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(anchors_file) as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Error: pocket_anchors.json is malformed: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    stats = {}
+    for pid_str, pdata in data.get("pockets", {}).items():
+        try:
+            pid = int(pid_str)
+        except ValueError:
+            continue
+
+        centroid = pdata.get("centroid", [None, None, None])
+        spread = pdata.get("spread", None)
+
+        # Quality label — matches identify_pockets.py display convention
+        if spread is None:
+            quality = "unknown"
+        elif spread < 2.0:
+            quality = "Tight"
+        elif spread < 5.0:
+            quality = "Moderate"
+        else:
+            quality = "Loose"
+
+        stats[pid] = {
+            "Center_X": round(centroid[0], 3) if centroid[0] is not None else None,
+            "Center_Y": round(centroid[1], 3) if centroid[1] is not None else None,
+            "Center_Z": round(centroid[2], 3) if centroid[2] is not None else None,
+            "Seed_Spread_A": round(spread, 3) if spread is not None else None,
+            "Quality": quality,
+        }
+
+    print(f"  ✓ Loaded anchor stats for {len(stats)} pockets from {anchors_path}")
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # Output writers
 # ---------------------------------------------------------------------------
 
@@ -374,14 +451,18 @@ def write_assignments_all(all_rows, output_dir):
     print(f"  ✓ pocket_assignments_all.csv  ({len(all_rows)} compounds)")
 
 
-def build_pocket_summary_rows(pockets, all_libraries, min_pocket_size, coord_stats=None):
+def build_pocket_summary_rows(pockets, all_libraries, min_pocket_size, anchor_stats=None, coord_stats=None):
     """Build sorted, filtered per-pocket summary rows.
 
     Sorted by Total_Members descending (dominant pocket first).
     Filtered to exclude pockets below min_pocket_size.
 
-    coord_stats: if provided by --deep-stats, adds Spread_A and Radius_A columns.
-    Currently always None.
+    anchor_stats: dict from load_anchor_stats() — adds frozen centroid coordinates,
+        seed-run spread, and quality label from pocket_anchors.json. These are the
+        CHEMBL-derived values and never change. Provided via --anchors flag.
+
+    coord_stats: future --deep-stats — recalculated spread/radius from all member
+        coordinates across all libraries. Currently always None.
 
     Returns (rows list, sorted library names list) — separated from the writer
     so the table can be printed to stdout and written to CSV from the same data.
@@ -395,13 +476,28 @@ def build_pocket_summary_rows(pockets, all_libraries, min_pocket_size, coord_sta
             continue
 
         row = {"Pocket": pid, "Total_Members": total}
+
+        # Per-library member counts — how many compounds from each library
+        # landed in this pocket. Core of Jeremy's cross-library comparison.
         for lib in sorted_libs:
             row[lib] = lib_counts.get(lib, 0)
 
+        # Frozen pocket geometry from seed run (pocket_anchors.json).
+        # Centroid coordinates are fixed at CHEMBL-derived values forever.
+        # Spread and quality reflect the CHEMBL seed population only.
+        if anchor_stats:
+            stats = anchor_stats.get(pid, {})
+            row["Center_X"]     = stats.get("Center_X")
+            row["Center_Y"]     = stats.get("Center_Y")
+            row["Center_Z"]     = stats.get("Center_Z")
+            row["Seed_Spread_A"] = stats.get("Seed_Spread_A")
+            row["Quality"]      = stats.get("Quality", "unknown")
+
+        # Planned: coordinate-based stats recalculated across all libraries
         if coord_stats is not None:
             stats = coord_stats.get(pid, {})
-            row["Spread_A"] = round(stats.get("spread", float("nan")), 3)
-            row["Radius_A"] = round(stats.get("radius", float("nan")), 3)
+            row["All_Spread_A"] = round(stats.get("spread", float("nan")), 3)
+            row["All_Radius_A"] = round(stats.get("radius", float("nan")), 3)
 
         rows.append(row)
 
@@ -409,22 +505,33 @@ def build_pocket_summary_rows(pockets, all_libraries, min_pocket_size, coord_sta
     return rows, sorted_libs
 
 
-def write_pocket_summary(pockets, all_libraries, output_dir, min_pocket_size, coord_stats=None):
+def write_pocket_summary(pockets, all_libraries, output_dir, min_pocket_size,
+                         anchor_stats=None, coord_stats=None):
     """Write per-pocket summary CSV and print a quick table to stdout.
 
     Primary deliverable for Jeremy — shows how many compounds from each library
-    land in each pocket. Pocket IDs are stable across runs (frozen at CHEMBL seed).
+    land in each pocket, alongside frozen pocket geometry from the seed run.
 
-    Columns: Pocket, Total_Members, [Library1], [Library2], ..., [LibraryN]
-    Optional (--deep-stats): Spread_A, Radius_A
+    Columns (always):
+        Pocket, Total_Members, [Library1], [Library2], ..., [LibraryN]
+
+    Columns (with --anchors):
+        Center_X, Center_Y, Center_Z   — frozen CHEMBL-derived centroid coordinates
+        Seed_Spread_A                  — spread of CHEMBL seed members (Å)
+        Quality                        — Tight / Moderate / Loose
+
+    Columns (planned --deep-stats):
+        All_Spread_A, All_Radius_A     — recalculated from all libraries combined
     """
     rows, sorted_libs = build_pocket_summary_rows(
-        pockets, all_libraries, min_pocket_size, coord_stats
+        pockets, all_libraries, min_pocket_size, anchor_stats, coord_stats
     )
 
     fieldnames = ["Pocket", "Total_Members"] + sorted_libs
+    if anchor_stats:
+        fieldnames += ["Center_X", "Center_Y", "Center_Z", "Seed_Spread_A", "Quality"]
     if coord_stats is not None:
-        fieldnames += ["Spread_A", "Radius_A"]
+        fieldnames += ["All_Spread_A", "All_Radius_A"]
 
     output_path = output_dir / "pocket_summary.csv"
     with open(output_path, "w", newline="") as f:
@@ -434,9 +541,11 @@ def write_pocket_summary(pockets, all_libraries, output_dir, min_pocket_size, co
 
     print(f"  ✓ pocket_summary.csv  ({len(rows)} pockets, min_size≥{min_pocket_size})")
 
-    # Stdout preview table
-    col_w = 15
+    # Stdout preview — col_w auto-sized to longest library name
+    col_w = max(15, max(len(lib) for lib in sorted_libs) + 2) if sorted_libs else 15
     header = f"  {'Pocket':<10} {'Total':<10}" + "".join(f"{lib:<{col_w}}" for lib in sorted_libs)
+    if anchor_stats:
+        header += f"  {'Spread_A':<12} {'Quality':<12}"
     divider = f"  {'-' * (len(header) - 2)}"
     print(f"\n  Pocket Summary (top 20):")
     print(divider)
@@ -445,6 +554,10 @@ def write_pocket_summary(pockets, all_libraries, output_dir, min_pocket_size, co
     for row in rows[:20]:
         line = f"  {row['Pocket']:<10} {row['Total_Members']:<10}"
         line += "".join(f"{row[lib]:<{col_w}}" for lib in sorted_libs)
+        if anchor_stats:
+            spread = row.get('Seed_Spread_A', '')
+            quality = row.get('Quality', '')
+            line += f"  {str(spread):<12} {quality:<12}"
         print(line)
     if len(rows) > 20:
         print(f"  ... and {len(rows) - 20} more pockets (see pocket_summary.csv)")
@@ -530,6 +643,12 @@ def main():
     print("  ✓ Seed consistency — all seeded runs reference the same anchor")
     check_duplicate_structures(all_rows)
 
+    # Load frozen centroid coords and spread from pocket_anchors.json if provided
+    # These come from the CHEMBL seed run and are never modified
+    if args.anchors:
+        print(f"\nLoading anchor stats:")
+    anchor_stats = load_anchor_stats(args.anchors)
+
     # Aggregate counts by pocket and library
     pockets, unique_libraries = aggregate_by_pocket(all_rows)
 
@@ -540,7 +659,7 @@ def main():
     print("\nWriting outputs:")
     write_assignments_all(all_rows, output_dir)
     write_pocket_summary(pockets, unique_libraries, output_dir,
-                         args.min_pocket_size, coord_stats)
+                         args.min_pocket_size, anchor_stats, coord_stats)
     write_merge_summary(args, args.runs, all_summaries, all_libraries,
                         all_rows, pockets, output_dir)
 
