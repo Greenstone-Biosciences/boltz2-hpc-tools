@@ -16,34 +16,37 @@ ADJ_PRED (Jeremy's adjusted prediction score):
     adj_pred = affinity_pred_value * affinity_probability_binary
     Computed for each of the three Boltz2 models (0, 1, 2).
     Mean adj_pred across all three models is also reported.
-    Sort by most negative mean_adj_pred for ranking.
+    Sorted by most negative mean_adj_pred — stronger predicted binding first.
 
-INPUT MODES:
-    --ids           Space-separated compound ID stems on the command line
-    --ids-file      One compound ID stem per line in a text file
+INPUT MODES (mutually exclusive):
+    --ids           One or more compound stem IDs on the command line
+    --ids-file      Text file with one compound stem ID per line
     --pocket-csv    pocket_assignments_all.csv from merge_pocket_runs.py
-                    Use with --pocket to filter to a specific pocket,
-                    and --receptor to filter to a specific receptor
+                    Use with --pocket to filter to one or more pockets
 
 OUTPUT:
-    CSV keyed by compound stem ID — joins cleanly to pocket_assignments_all.csv
+    CSV keyed by compound stem ID. Joins to pocket_assignments_all.csv
     on the Structure column (strip _aligned.cif suffix to get the stem).
+    Ranked within each pocket by mean_adj_pred (most negative first).
 
 Usage examples:
 
-    # Single compound across all predictions in a receptor dir
+    # Query specific compounds across multiple library directories
     python3 query_affinity.py \\
-        --input /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/ApexBio \\
-        --ids ApexBio_333 Drugbank_11072 \\
-        --output results.csv
+        --input \\
+            /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/CHEMBL \\
+            /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/ApexBio \\
+        --ids ApexBio_333 Drugbank_11072 FDA_65 \\
+        --output genistein_IL11Ra.csv
 
-    # All compounds in pocket 1 ranked by adj_pred (IL11Ra)
+    # Rank all compounds in pockets 1 and 2 by adj_pred
     python3 query_affinity.py \\
-        --input /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/ApexBio \\
-        --pocket-csv /data/Shared/ibrahim_pocket_analysis/production_20260512/merged/IL11Ra/pocket_assignments_all.csv \\
-        --pocket 1 \\
-        --receptor ApexBio \\
-        --output pocket1_IL11Ra_ranked.csv
+        --input \\
+            /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/CHEMBL \\
+            /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/ApexBio \\
+        --pocket-csv merged/IL11Ra/pocket_assignments_all.csv \\
+        --pocket 1 2 \\
+        --output pocket1_2_IL11Ra_ranked.csv
 
     # From a file of IDs
     python3 query_affinity.py \\
@@ -71,10 +74,10 @@ AFFINITY_MODELS = [
     ("affinity_pred_value2", "affinity_probability_binary2"),  # model 2
 ]
 
-# Output CSV columns
+# Output CSV columns — ID joins to Structure in pocket_assignments_all.csv
 OUTPUT_FIELDS = [
     "ID",
-    "Receptor_Dir",
+    "Libraries_Searched",
     "Pocket",
     "Rank_In_Pocket",
     "affinity_pred_value",
@@ -101,22 +104,24 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Input: Boltz2 base directory
     parser.add_argument(
         "--input",
+        nargs="+",
         required=True,
         metavar="BOLTZ2_DIR",
-        help="Boltz2 output base directory to search for affinity JSONs "
-             "(e.g. /data/Shared/Ibrahim/Debarun/IL11Ra_monomer/ApexBio)"
+        help="One or more Boltz2 output directories to search for affinity JSONs. "
+             "Each directory is searched in order — first match wins. "
+             "Pass multiple to cover both CHEMBL and ApexBio in one query. "
+             "e.g. --input .../IL11Ra_monomer/CHEMBL .../IL11Ra_monomer/ApexBio"
     )
 
     # Compound ID input — mutually exclusive modes
-    id_group = parser.add_mutually_exclusive_group()
+    id_group = parser.add_mutually_exclusive_group(required=True)
     id_group.add_argument(
         "--ids",
         nargs="+",
         metavar="ID",
-        help="One or more compound stem IDs to query "
+        help="One or more compound stem IDs "
              "(e.g. ApexBio_333 Drugbank_11072 FDA_65)"
     )
     id_group.add_argument(
@@ -127,24 +132,19 @@ def parse_args():
     id_group.add_argument(
         "--pocket-csv",
         metavar="FILE",
-        help="pocket_assignments_all.csv from merge_pocket_runs.py — "
-             "use with --pocket and optionally --receptor to filter compounds"
+        help="pocket_assignments_all.csv from merge_pocket_runs.py. "
+             "Use with --pocket to filter to specific pockets."
     )
 
-    # Pocket / receptor filters (used with --pocket-csv)
     parser.add_argument(
         "--pocket",
+        nargs="+",
         type=int,
         default=None,
         metavar="N",
-        help="Filter pocket_assignments_all.csv to this pocket ID"
-    )
-    parser.add_argument(
-        "--receptor",
-        default=None,
-        metavar="LIBRARY",
-        help="Filter pocket_assignments_all.csv to this library/receptor label "
-             "(e.g. ApexBio, CHEMBL)"
+        help="One or more pocket IDs to filter when using --pocket-csv. "
+             "Compounds are ranked within each pocket separately. "
+             "e.g. --pocket 1 2 25"
     )
 
     parser.add_argument(
@@ -152,13 +152,6 @@ def parse_args():
         required=True,
         metavar="OUTPUT_CSV",
         help="Output CSV file path"
-    )
-    parser.add_argument(
-        "--top",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Only output top N compounds by mean_adj_pred (most negative first)"
     )
 
     return parser.parse_args()
@@ -172,7 +165,7 @@ def collect_ids_from_args(args):
     """Collect compound stem IDs from whichever input mode was specified.
 
     Returns a list of (stem_id, pocket_label) tuples.
-    pocket_label is None when not filtering by pocket.
+    pocket_label is None when not using --pocket-csv.
     """
     if args.ids:
         return [(id_.strip(), None) for id_ in args.ids]
@@ -186,20 +179,21 @@ def collect_ids_from_args(args):
             return [(line.strip(), None) for line in f if line.strip()]
 
     if args.pocket_csv:
-        return collect_ids_from_pocket_csv(args.pocket_csv, args.pocket, args.receptor)
+        return collect_ids_from_pocket_csv(args.pocket_csv, args.pocket)
 
-    print("Error: one of --ids, --ids-file, or --pocket-csv is required", file=sys.stderr)
+    # Should never reach here due to mutually exclusive group being required
+    print("Error: one of --ids, --ids-file, or --pocket-csv is required",
+          file=sys.stderr)
     sys.exit(1)
 
 
-def collect_ids_from_pocket_csv(pocket_csv, pocket_filter, receptor_filter):
+def collect_ids_from_pocket_csv(pocket_csv, pocket_filter):
     """Read compound IDs from pocket_assignments_all.csv.
 
     Strips _aligned.cif suffix from Structure column to recover the stem ID
     that matches Boltz2 output filenames.
 
-    pocket_filter: if set, only include compounds assigned to this pocket ID
-    receptor_filter: if set, only include compounds from this library
+    pocket_filter: list of pocket IDs to include, or None for all pockets.
     """
     csv_path = Path(pocket_csv)
     if not csv_path.exists():
@@ -210,7 +204,7 @@ def collect_ids_from_pocket_csv(pocket_csv, pocket_filter, receptor_filter):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
 
-        required = {"Structure", "Pocket", "Library"}
+        required = {"Structure", "Pocket"}
         missing = required - set(reader.fieldnames or [])
         if missing:
             print(f"Error: pocket_assignments_all.csv missing columns: {missing}",
@@ -219,25 +213,17 @@ def collect_ids_from_pocket_csv(pocket_csv, pocket_filter, receptor_filter):
 
         for row in reader:
             pocket_id = int(row["Pocket"])
-            library = row["Library"]
 
-            if pocket_filter is not None and pocket_id != pocket_filter:
-                continue
-            if receptor_filter is not None and library != receptor_filter:
+            if pocket_filter is not None and pocket_id not in pocket_filter:
                 continue
 
-            # Strip _aligned.cif suffix — this is the stem used in Boltz2 filenames
-            stem = row["Structure"].replace("_aligned.cif", "")
+            # Strip _aligned.cif suffix to get stem matching Boltz2 filenames
+            stem = row["Structure"].replace("_affinity_model_0_aligned.cif", "")
             results.append((stem, pocket_id))
 
     if not results:
-        filters = []
-        if pocket_filter is not None:
-            filters.append(f"pocket={pocket_filter}")
-        if receptor_filter:
-            filters.append(f"receptor={receptor_filter}")
-        print(f"Warning: no compounds found in {pocket_csv}"
-              + (f" with filters: {', '.join(filters)}" if filters else ""),
+        filter_str = f" with --pocket {pocket_filter}" if pocket_filter else ""
+        print(f"Warning: no compounds found in {pocket_csv}{filter_str}",
               file=sys.stderr)
 
     return results
@@ -247,34 +233,64 @@ def collect_ids_from_pocket_csv(pocket_csv, pocket_filter, receptor_filter):
 # Affinity JSON discovery and parsing
 # ---------------------------------------------------------------------------
 
-def find_affinity_json(base_dir, stem_id):
-    """Find the affinity JSON for a compound stem ID in the Boltz2 output tree.
+def build_affinity_index(base_dirs):
+    """Pre-index all affinity JSONs across all base directories.
 
-    Boltz2 output structure:
-        {base_dir}/**/predictions/{stem_id}_affinity/affinity_{stem_id}_affinity.json
+    Scans each base_dir once using glob, building a dict:
+        stem_id -> Path to affinity JSON
 
-    Returns Path to the JSON file, or None if not found.
-    Uses glob to handle arbitrary nesting (Nut_0000, Nut_0001, etc.).
+    This avoids per-compound glob scans which are extremely slow at scale.
+    One glob per directory instead of one glob per compound.
+
+    Stem extraction from filename: affinity_{stem}_affinity.json
+    e.g. affinity_ApexBio_333_affinity.json -> ApexBio_333
+
+    Warns on duplicate stems (same compound in multiple batches).
     """
-    pattern = f"**/predictions/{stem_id}_affinity/affinity_{stem_id}_affinity.json"
-    matches = list(Path(base_dir).glob(pattern))
+    index = {}
+    total = 0
 
-    if not matches:
-        return None
-    if len(matches) > 1:
-        # Duplicate compound across batches — take first, warn
-        print(f"  ⚠ Warning: {stem_id} found in {len(matches)} batch dirs — "
-              f"using first: {matches[0]}", file=sys.stderr)
-    return matches[0]
+    for base_dir in base_dirs:
+        pattern = "**/predictions/*_affinity/affinity_*_affinity.json"
+        matches = list(Path(base_dir).glob(pattern))
+        total += len(matches)
 
+        for match in matches:
+            # filename: affinity_{stem}_affinity.json
+            fname = match.stem                  # affinity_ApexBio_333_affinity
+            stem = fname[len("affinity_"):]     # ApexBio_333_affinity
+            if stem.endswith("_affinity"):
+                stem = stem[:-len("_affinity")]        # ApexBio_333
+
+            if stem in index:
+                print(f"  ⚠ Duplicate stem '{stem}' — keeping first", file=sys.stderr)
+            else:
+                index[stem] = match
+
+    print(f"  Indexed {total} affinity JSONs → {len(index)} unique stems")
+    return index
+
+
+def find_affinity_json(index, stem_id):
+    """ Look up a compound stem ID in the pre-built affinity index.
+
+    0(1) dict lookup instead of per-compound glob scan.
+    Returns (Path, source_dir_name) or (None, None) if not found.
+    """
+    path = index.get(stem_id)
+    if path is None:
+        return None, None
+    return path, Path(path).parts[-6]
 
 def parse_affinity_json(json_path):
-    """Parse a Boltz2 affinity JSON and compute adj_pred for all three models.
+    """Parse Boltz2 affinity JSON and compute adj_pred for all three models.
 
     adj_pred (Jeremy's adjusted prediction score):
         adj_pred = affinity_pred_value * affinity_probability_binary
 
-    Computed for each of the three Boltz2 model replicates.
+    This combines the raw predicted affinity with Boltz2's confidence that
+    the prediction is in the active range. More negative = stronger predicted
+    binding. Computed for each of the three Boltz2 model replicates.
     mean_adj_pred is the arithmetic mean across all three.
 
     Returns a flat dict of all values, or None if the file is malformed.
@@ -294,10 +310,9 @@ def parse_affinity_json(json_path):
         prob_val = data.get(prob_key)
 
         suffix = "" if i == 0 else str(i)
-        result[f"affinity_pred_value{suffix}"]        = pred_val
+        result[f"affinity_pred_value{suffix}"]         = pred_val
         result[f"affinity_probability_binary{suffix}"] = prob_val
 
-        # adj_pred — None if either component is missing
         if pred_val is not None and prob_val is not None:
             adj = pred_val * prob_val
             result[f"adj_pred_{i}"] = round(adj, 6)
@@ -315,64 +330,75 @@ def parse_affinity_json(json_path):
 # Core query
 # ---------------------------------------------------------------------------
 
-def query_compounds(base_dir, id_pocket_pairs, receptor_dir_label):
+def query_compounds(affinity_index, id_pocket_pairs, libraries_label):
     """Query affinity values for a list of (stem_id, pocket_label) pairs.
 
+    Searches across all provided base_dirs for each compound.
+    Compounds not found are included with null values — never silently dropped.
+
     Returns a list of result dicts, one per compound.
-    Compounds with no affinity JSON found are included with null values
-    so they're visible in the output (not silently dropped).
     """
     results = []
     n_found = 0
     n_missing = 0
 
+    null_row_template = {
+        "affinity_pred_value": None,
+        "affinity_probability_binary": None,
+        "adj_pred_0": None,
+        "affinity_pred_value1": None,
+        "affinity_probability_binary1": None,
+        "adj_pred_1": None,
+        "affinity_pred_value2": None,
+        "affinity_probability_binary2": None,
+        "adj_pred_2": None,
+        "mean_adj_pred": None,
+        "affinity_json_path": None,
+    }
+
     for stem_id, pocket_label in id_pocket_pairs:
-        json_path = find_affinity_json(base_dir, stem_id)
+        json_path, source_dir = find_affinity_json(affinity_index, stem_id)
 
         if json_path is None:
             print(f"  ⚠ Not found: {stem_id}", file=sys.stderr)
             n_missing += 1
-            # Include in output with nulls so the compound is visible
             results.append({
                 "ID": stem_id,
-                "Receptor_Dir": receptor_dir_label,
+                "Libraries_Searched": libraries_label,
                 "Pocket": pocket_label,
                 "Rank_In_Pocket": None,
-                "affinity_pred_value": None,
-                "affinity_probability_binary": None,
-                "adj_pred_0": None,
-                "affinity_pred_value1": None,
-                "affinity_probability_binary1": None,
-                "adj_pred_1": None,
-                "affinity_pred_value2": None,
-                "affinity_probability_binary2": None,
-                "adj_pred_2": None,
-                "mean_adj_pred": None,
-                "affinity_json_path": None,
+                **null_row_template,
             })
             continue
 
         n_found += 1
         affinity = parse_affinity_json(json_path)
         if affinity is None:
+            results.append({
+                "ID": stem_id,
+                "Libraries_Searched": libraries_label,
+                "Pocket": pocket_label,
+                "Rank_In_Pocket": None,
+                **null_row_template,
+            })
             continue
 
         results.append({
             "ID": stem_id,
-            "Receptor_Dir": receptor_dir_label,
+            "Libraries_Searched": libraries_label,
             "Pocket": pocket_label,
-            "Rank_In_Pocket": None,          # filled in after sorting
-            "affinity_pred_value":            affinity.get("affinity_pred_value"),
-            "affinity_probability_binary":    affinity.get("affinity_probability_binary"),
-            "adj_pred_0":                     affinity.get("adj_pred_0"),
-            "affinity_pred_value1":           affinity.get("affinity_pred_value1"),
-            "affinity_probability_binary1":   affinity.get("affinity_probability_binary1"),
-            "adj_pred_1":                     affinity.get("adj_pred_1"),
-            "affinity_pred_value2":           affinity.get("affinity_pred_value2"),
-            "affinity_probability_binary2":   affinity.get("affinity_probability_binary2"),
-            "adj_pred_2":                     affinity.get("adj_pred_2"),
-            "mean_adj_pred":                  affinity.get("mean_adj_pred"),
-            "affinity_json_path":             str(json_path),
+            "Rank_In_Pocket": None,
+            "affinity_pred_value":           affinity.get("affinity_pred_value"),
+            "affinity_probability_binary":   affinity.get("affinity_probability_binary"),
+            "adj_pred_0":                    affinity.get("adj_pred_0"),
+            "affinity_pred_value1":          affinity.get("affinity_pred_value1"),
+            "affinity_probability_binary1":  affinity.get("affinity_probability_binary1"),
+            "adj_pred_1":                    affinity.get("adj_pred_1"),
+            "affinity_pred_value2":          affinity.get("affinity_pred_value2"),
+            "affinity_probability_binary2":  affinity.get("affinity_probability_binary2"),
+            "adj_pred_2":                    affinity.get("adj_pred_2"),
+            "mean_adj_pred":                 affinity.get("mean_adj_pred"),
+            "affinity_json_path":            str(json_path),
         })
 
     print(f"  Found: {n_found}  Missing: {n_missing}")
@@ -380,22 +406,20 @@ def query_compounds(base_dir, id_pocket_pairs, receptor_dir_label):
 
 
 def assign_ranks(results):
-    """Assign Rank_In_Pocket sorted by mean_adj_pred ascending (most negative first).
+    """Assign Rank_In_Pocket sorted by adj_pred_0 ascending (most negative first).
 
-    Compounds with None mean_adj_pred are ranked last.
-    Ranking is per-pocket if pocket labels are present, otherwise global.
+    Ranking is per pocket when pocket labels are present, otherwise global.
+    Compounds with None adj_pred_0 are ranked last within their pocket.
     """
-    # Group by pocket
     by_pocket = {}
     for row in results:
         key = row.get("Pocket")
         by_pocket.setdefault(key, []).append(row)
 
     for pocket_rows in by_pocket.values():
-        # Sort: valid scores first (ascending = most negative first), then None
         pocket_rows.sort(key=lambda r: (
-            r["mean_adj_pred"] is None,
-            r["mean_adj_pred"] if r["mean_adj_pred"] is not None else float("inf")
+            r["adj_pred_0"] is None,
+            r["adj_pred_0"] if r["adj_pred_0"] is not None else float("inf")
         ))
         for rank, row in enumerate(pocket_rows, start=1):
             row["Rank_In_Pocket"] = rank
@@ -407,11 +431,8 @@ def assign_ranks(results):
 # Output
 # ---------------------------------------------------------------------------
 
-def write_output(results, output_path, top_n=None):
+def write_output(results, output_path):
     """Write results CSV and print a summary table to stdout."""
-    if top_n is not None:
-        results = results[:top_n]
-
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -423,22 +444,22 @@ def write_output(results, output_path, top_n=None):
     print(f"\n✓ Saved {len(results)} rows to {output_path}")
 
     # Stdout summary table
-    col = [20, 8, 6, 10, 10, 10]
+    col = [22, 8, 6, 10, 10, 10]
     header = (f"  {'ID':<{col[0]}} {'Pocket':<{col[1]}} {'Rank':<{col[2]}} "
               f"{'adj_pred_0':<{col[3]}} {'adj_pred_1':<{col[4]}} {'mean_adj':<{col[5]}}")
     divider = f"  {'-' * (sum(col) + 5)}"
 
-    print(f"\n  Results (sorted by mean_adj_pred, most negative first):")
+    print(f"\n  Results (sorted by adj_pred_0, most negative first):")
     print(divider)
     print(header)
     print(divider)
 
     for row in results[:30]:
-        adj0     = f"{row['adj_pred_0']:.4f}"     if row['adj_pred_0']     is not None else "N/A"
-        adj1     = f"{row['adj_pred_1']:.4f}"     if row['adj_pred_1']     is not None else "N/A"
-        mean_adj = f"{row['mean_adj_pred']:.4f}"  if row['mean_adj_pred']  is not None else "N/A"
-        pocket   = str(row['Pocket'])  if row['Pocket']          is not None else "—"
-        rank     = str(row['Rank_In_Pocket']) if row['Rank_In_Pocket'] is not None else "—"
+        adj0     = f"{row['adj_pred_0']:.4f}"    if row['adj_pred_0']    is not None else "N/A"
+        adj1     = f"{row['adj_pred_1']:.4f}"    if row['adj_pred_1']    is not None else "N/A"
+        mean_adj = f"{row['mean_adj_pred']:.4f}" if row['mean_adj_pred'] is not None else "N/A"
+        pocket   = str(row['Pocket'])            if row['Pocket']        is not None else "—"
+        rank     = str(row['Rank_In_Pocket'])    if row['Rank_In_Pocket'] is not None else "—"
 
         print(f"  {row['ID']:<{col[0]}} {pocket:<{col[1]}} {rank:<{col[2]}} "
               f"{adj0:<{col[3]}} {adj1:<{col[4]}} {mean_adj:<{col[5]}}")
@@ -455,22 +476,25 @@ def write_output(results, output_path, top_n=None):
 def main():
     args = parse_args()
 
-    base_dir = Path(args.input)
-    if not base_dir.exists():
-        print(f"Error: --input directory not found: {args.input}", file=sys.stderr)
-        sys.exit(1)
+    # Validate all input directories exist
+    for d in args.input:
+        if not Path(d).exists():
+            print(f"Error: --input directory not found: {d}", file=sys.stderr)
+            sys.exit(1)
 
-    receptor_label = base_dir.name  # e.g. 'ApexBio' from the path
+    libraries_label = "+".join(Path(d).name for d in args.input)
 
     print("=" * 60)
     print("Boltz2 Affinity Query")
     print("=" * 60)
-    print(f"Input dir:  {args.input}")
+    print(f"Searching:  {libraries_label}")
     print(f"Output:     {args.output}")
-    if args.pocket is not None:
-        print(f"Pocket:     {args.pocket}")
-    if args.receptor is not None:
-        print(f"Receptor:   {args.receptor}")
+    if args.pocket:
+        print(f"Pockets:    {args.pocket}")
+    print()
+
+    print("Indexing affinity JSONs...")
+    affinity_index = build_affinity_index(args.input)
     print()
 
     # Collect compound IDs
@@ -479,15 +503,15 @@ def main():
     print(f"  {len(id_pocket_pairs)} compounds to query")
     print()
 
-    # Query affinity values
+    # Query affinity values across all input dirs
     print("Querying affinity JSONs:")
-    results = query_compounds(base_dir, id_pocket_pairs, receptor_label)
+    results = query_compounds(affinity_index, id_pocket_pairs, libraries_label)
 
-    # Sort and rank
+    # Sort and rank within each pocket
     results = assign_ranks(results)
 
     # Write output
-    write_output(results, args.output, args.top)
+    write_output(results, args.output)
 
     print()
     print("=" * 60)
