@@ -76,21 +76,13 @@ AFFINITY_MODELS = [
 
 # Output CSV columns — ID joins to Structure in pocket_assignments_all.csv
 OUTPUT_FIELDS = [
-    "ID",
-    "Libraries_Searched",
+    "Structure",
     "Pocket",
+    "Library",
     "Rank_In_Pocket",
     "affinity_pred_value",
     "affinity_probability_binary",
     "adj_pred_0",
-    "affinity_pred_value1",
-    "affinity_probability_binary1",
-    "adj_pred_1",
-    "affinity_pred_value2",
-    "affinity_probability_binary2",
-    "adj_pred_2",
-    "mean_adj_pred",
-    "affinity_json_path",
 ]
 
 
@@ -168,7 +160,7 @@ def collect_ids_from_args(args):
     pocket_label is None when not using --pocket-csv.
     """
     if args.ids:
-        return [(id_.strip(), None) for id_ in args.ids]
+        return [(id_.strip(), None, None) for id_ in args.ids]
 
     if args.ids_file:
         ids_path = Path(args.ids_file)
@@ -176,7 +168,7 @@ def collect_ids_from_args(args):
             print(f"Error: --ids-file not found: {args.ids_file}", file=sys.stderr)
             sys.exit(1)
         with open(ids_path) as f:
-            return [(line.strip(), None) for line in f if line.strip()]
+            return [(line.strip(), None, None) for line in f if line.strip()]
 
     if args.pocket_csv:
         return collect_ids_from_pocket_csv(args.pocket_csv, args.pocket)
@@ -219,7 +211,8 @@ def collect_ids_from_pocket_csv(pocket_csv, pocket_filter):
 
             # Strip _aligned.cif suffix to get stem matching Boltz2 filenames
             stem = row["Structure"].replace("_affinity_model_0_aligned.cif", "")
-            results.append((stem, pocket_id))
+            library = row.get("Library", "")
+            results.append((stem, pocket_id, library))
 
     if not results:
         filter_str = f" with --pocket {pocket_filter}" if pocket_filter else ""
@@ -356,16 +349,16 @@ def query_compounds(affinity_index, id_pocket_pairs, libraries_label):
         "affinity_json_path": None,
     }
 
-    for stem_id, pocket_label in id_pocket_pairs:
+    for stem_id, pocket_label, library in id_pocket_pairs:
         json_path, source_dir = find_affinity_json(affinity_index, stem_id)
 
         if json_path is None:
             print(f"  ⚠ Not found: {stem_id}", file=sys.stderr)
             n_missing += 1
             results.append({
-                "ID": stem_id,
-                "Libraries_Searched": libraries_label,
+                "Structure": stem_id,
                 "Pocket": pocket_label,
+                "Library": library or "",
                 "Rank_In_Pocket": None,
                 **null_row_template,
             })
@@ -375,8 +368,8 @@ def query_compounds(affinity_index, id_pocket_pairs, libraries_label):
         affinity = parse_affinity_json(json_path)
         if affinity is None:
             results.append({
-                "ID": stem_id,
-                "Libraries_Searched": libraries_label,
+                "Structure": stem_id,
+                "Library": library or "",
                 "Pocket": pocket_label,
                 "Rank_In_Pocket": None,
                 **null_row_template,
@@ -384,8 +377,8 @@ def query_compounds(affinity_index, id_pocket_pairs, libraries_label):
             continue
 
         results.append({
-            "ID": stem_id,
-            "Libraries_Searched": libraries_label,
+            "Structure": stem_id,
+            "Library": library or "",
             "Pocket": pocket_label,
             "Rank_In_Pocket": None,
             "affinity_pred_value":           affinity.get("affinity_pred_value"),
@@ -424,6 +417,12 @@ def assign_ranks(results):
         for rank, row in enumerate(pocket_rows, start=1):
             row["Rank_In_Pocket"] = rank
 
+    # Sort List in place and return
+    results.sort(key=lambda r: (
+        r["adj_pred_0"] is None,
+        r["adj_pred_0"] if r["adj_pred_0"] is not None else float("inf")
+        ))
+
     return results
 
 
@@ -431,42 +430,48 @@ def assign_ranks(results):
 # Output
 # ---------------------------------------------------------------------------
 
+
 def write_output(results, output_path):
-    """Write results CSV and print a summary table to stdout."""
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-
     with open(out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(results)
-
     print(f"\n✓ Saved {len(results)} rows to {output_path}")
 
-    # Stdout summary table
-    col = [22, 8, 6, 10, 10, 10]
-    header = (f"  {'ID':<{col[0]}} {'Pocket':<{col[1]}} {'Rank':<{col[2]}} "
-              f"{'adj_pred_0':<{col[3]}} {'adj_pred_1':<{col[4]}} {'mean_adj':<{col[5]}}")
-    divider = f"  {'-' * (sum(col) + 5)}"
+    # results is already sorted by adj_pred_0 from assign_ranks
+    ranked = [r for r in results if r["adj_pred_0"] is not None]
+    unranked = [r for r in results if r["adj_pred_0"] is None]
+
+    col = [30, 8, 12, 6, 10]
+    hdr = f"  {'Structure':<{col[0]}} {'Pocket':<{col[1]}} {'Library':<{col[2]}} {'Rank':<{col[3]}} {'adj_pred_0':<{col[4]}}"
+    div = f"  {'-' * (sum(col) + 4)}"
+
+    def fmt_row(row):
+        adj0   = f"{row['adj_pred_0']:.4f}" if row['adj_pred_0'] is not None else "N/A"
+        pocket = str(row['Pocket']) if row['Pocket'] is not None else "—"
+        rank   = str(row['Rank_In_Pocket']) if row['Rank_In_Pocket'] is not None else "—"
+        lib    = str(row['Library'] or "")
+        return (f"  {row['Structure']:<{col[0]}} {pocket:<{col[1]}} "
+                f"{lib:<{col[2]}} {rank:<{col[3]}} {adj0:<{col[4]}}")
 
     print(f"\n  Results (sorted by adj_pred_0, most negative first):")
-    print(divider)
-    print(header)
-    print(divider)
+    print(f"  {len(ranked)} with scores, {len(unranked)} without (N/A — no affinity JSON)")
+    print(div); print(hdr); print(div)
 
-    for row in results[:30]:
-        adj0     = f"{row['adj_pred_0']:.4f}"    if row['adj_pred_0']    is not None else "N/A"
-        adj1     = f"{row['adj_pred_1']:.4f}"    if row['adj_pred_1']    is not None else "N/A"
-        mean_adj = f"{row['mean_adj_pred']:.4f}" if row['mean_adj_pred'] is not None else "N/A"
-        pocket   = str(row['Pocket'])            if row['Pocket']        is not None else "—"
-        rank     = str(row['Rank_In_Pocket'])    if row['Rank_In_Pocket'] is not None else "—"
+    show = 15
+    if len(ranked) <= show * 2:
+        for r in ranked:
+            print(fmt_row(r))
+    else:
+        for r in ranked[:show]:
+            print(fmt_row(r))
+        print(f"  ... {len(ranked) - show*2} more ...")
+        for r in ranked[-show:]:
+            print(fmt_row(r))
 
-        print(f"  {row['ID']:<{col[0]}} {pocket:<{col[1]}} {rank:<{col[2]}} "
-              f"{adj0:<{col[3]}} {adj1:<{col[4]}} {mean_adj:<{col[5]}}")
-
-    if len(results) > 30:
-        print(f"  ... and {len(results) - 30} more rows (see {output_path})")
-    print(divider)
+    print(div)
 
 
 # ---------------------------------------------------------------------------
