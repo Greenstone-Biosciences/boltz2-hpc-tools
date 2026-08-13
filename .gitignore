@@ -1,0 +1,37 @@
+# Vim swap/backup files — caused a stray commit before, never again
+*.swp
+*.swo
+*.swn
+.*.swp
+.*.swo
+*~
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ipynb_checkpoints/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Pipeline run outputs — these belong on /data, never in git
+aligned_cifs/
+*.csv
+!**/example*.csv
+logs/
+run_summary.json
+pocket_anchors.json
+reference.cif
+
+# Large/local test artifacts
+/tmp/
+test_output/
+*.log
