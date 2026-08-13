@@ -1,8 +1,8 @@
 #!/bin/bash
 ################################################################################
-# Script Name:    valid_boltz.sh
+# Script Name:    pocket_pipeline.sh
 # Description:    Align Boltz2 structures and calculate ligand centroids, binding pockets
-# Usage:          ./valid_boltz.sh -i INPUT_DIR [-o OUTPUT_DIR]
+# Usage:          ./pocket_pipeline.sh -i INPUT_DIR [-o OUTPUT_DIR]
 # Written by:     Chris Yan
 ################################################################################
 

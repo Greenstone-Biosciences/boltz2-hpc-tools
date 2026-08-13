@@ -15,12 +15,12 @@ Nutz.sh, setup.sh, prep_analyze, Archive/) unless explicitly asked.
 
 Boltz2 CIF outputs (HPC, /data/jleitz/Debarun/, other locations of boltz2 runs with .cifs)
 |
-valid_boltz.sh --save-seed <- fresh DBSCAN run, establishes pocket coords
+pocket_pipeline.sh --save-seed <- fresh DBSCAN run, establishes pocket coords
 |
 pocket_anchors.json <- FROZEN: pocket centroids, radii, member ledger
 reference.cif <- FROZEN: alignment coordinate frame
 |
-valid_boltz.sh --seed <- each subsequent library (ApexBio, etc.)
+pocket_pipeline.sh --seed <- each subsequent library (ApexBio, etc.)
 |
 pocket_assignments.csv <- per-library compound -> pocket assignments
 |
@@ -35,7 +35,7 @@ per-pocket ranked CSVs <- deliverable for Jeremy
 
 ## Scripts
 
-- `valid_boltz.sh` — bash orchestrator. CIF discovery, calls the two Python
+- `pocket_pipeline.sh` — bash orchestrator. CIF discovery, calls the two Python
   scripts below. `--seed DIR` / `--save-seed DIR` toggle seeded vs fresh mode.
     `SCRIPT_DIR` resolves via `${BASH_SOURCE[0]}` — must stay in the same
       directory as the two Python scripts it calls.
@@ -79,7 +79,7 @@ per-pocket ranked CSVs <- deliverable for Jeremy
           - IL11_IL11RA complex has low selfcheck rate at eps=5.0 (~31%) vs eps=7.0
             (~58.7%) — higher structural variability than monomers. eps=7.0 seed
               exists but hasn't been used for the full ApexBio assignment yet.
-              - Pipeline README section still needed: valid_boltz.sh usage, --seed/
+              - Pipeline README section still needed: pocket_pipeline.sh usage, --seed/
                 --save-seed workflow, pocket_anchors.json structure, query_affinity.py
                   usage.
 

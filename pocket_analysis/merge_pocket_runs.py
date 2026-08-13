@@ -5,11 +5,11 @@ Merge pocket assignments from multiple library runs into a unified cross-library
 
 PIPELINE POSITION: Reporting layer only. This script does not re-run clustering,
 modify the anchor file, or change any pocket assignments. It reads existing output
-files produced by valid_boltz.sh and combines them.
+files produced by pocket_pipeline.sh and combines them.
 
 CONTEXT: The pocket coordinate system is established once by the CHEMBL seed run
-(valid_boltz.sh --save-seed) and frozen. Every subsequent library is assigned against
-that frozen system (valid_boltz.sh --seed), producing a pocket_assignments.csv per
+(pocket_pipeline.sh --save-seed) and frozen. Every subsequent library is assigned against
+that frozen system (pocket_pipeline.sh --seed), producing a pocket_assignments.csv per
 library. This script combines those per-library CSVs into a single master view and
 recalculates per-pocket statistics across all libraries.
 
@@ -54,7 +54,7 @@ from datetime import datetime
 # Required columns in pocket_assignments.csv (produced by identify_pockets.py)
 ASSIGNMENTS_REQUIRED_COLS = {"Structure", "Pocket", "Cluster_Size"}
 
-# Fields we read from run_summary.json (produced by identify_pockets.py via valid_boltz.sh)
+# Fields we read from run_summary.json (produced by identify_pockets.py via pocket_pipeline.sh)
 SUMMARY_REQUIRED_FIELDS = {"output_dir"}
 SUMMARY_OPTIONAL_FIELDS = {"cif_input_dir", "ligand_centers_path", "seed_dir",
                             "mode", "timestamp", "n_input", "n_assigned_existing",
@@ -200,7 +200,7 @@ def infer_library_name(summary, run_path):
     Resolution order (most to least semantically stable):
 
     1. cif_input_dir basename — the original Boltz2 source directory, recorded
-       by valid_boltz.sh via --cif-input-dir. Most stable because it names the
+       by pocket_pipeline.sh via --cif-input-dir. Most stable because it names the
        actual library directory set by Jeremy's upstream pipeline.
        e.g. /data/.../IL11Ra_monomer/ApexBio  →  'ApexBio'
 
